@@ -348,6 +348,185 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Analytics endpoint for workload metrics
+  app.get("/api/analytics/workload", ensureAuthenticated, async (req, res) => {
+    try {
+      // Validate query parameters
+      const { start, end, type } = req.query;
+      
+      if (!start || !end || !type) {
+        return res.status(400).json({ error: "Missing required parameters" });
+      }
+      
+      const startDate = new Date(start as string);
+      const endDate = new Date(end as string);
+      
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        return res.status(400).json({ error: "Invalid date format" });
+      }
+      
+      // Different response based on type
+      if (type === "users") {
+        // Get all audits completed in the date range
+        const allAudits = await storage.getAudits();
+        const completedAudits = allAudits.filter(audit => {
+          const updatedAt = new Date(audit.updatedAt);
+          return (
+            updatedAt >= startDate && 
+            updatedAt <= endDate && 
+            (audit.status === "approved" || audit.status === "rejected")
+          );
+        });
+        
+        // Get all users
+        const users = await Promise.all(
+          Array.from(new Set(completedAudits.map(a => a.assignedToId)))
+            .filter(id => id !== null)
+            .map(async id => await storage.getUser(id as number))
+        );
+        
+        // Calculate metrics per user
+        const userMetrics = await Promise.all(users.map(async user => {
+          if (!user) return null;
+          
+          // Get audits assigned to this user
+          const userAudits = allAudits.filter(a => a.assignedToId === user.id);
+          
+          // Get completed audits (approved or rejected) in date range
+          const userCompletedAudits = completedAudits.filter(a => a.assignedToId === user.id);
+          
+          // Calculate average processing time in seconds
+          let totalProcessingTime = 0;
+          for (const audit of userCompletedAudits) {
+            const assignedEvent = await storage.getAuditEvents(audit.id)
+              .then(events => events.find(e => e.eventType === "assigned"));
+            
+            if (assignedEvent) {
+              const assignedTimestamp = new Date(assignedEvent.timestamp).getTime();
+              const completedTimestamp = new Date(audit.updatedAt).getTime();
+              totalProcessingTime += (completedTimestamp - assignedTimestamp) / 1000; // in seconds
+            }
+          }
+          
+          const averageProcessingTime = userCompletedAudits.length > 0 
+            ? totalProcessingTime / userCompletedAudits.length 
+            : 0;
+          
+          // Calculate completion rate
+          const assigned = userAudits.length;
+          const completed = userCompletedAudits.length;
+          const completionRate = assigned > 0 ? completed / assigned : 0;
+          
+          // Count pending audits
+          const pendingCount = userAudits.filter(a => 
+            a.status === "pending" || a.status === "in_progress" || a.status === "needs_info"
+          ).length;
+          
+          return {
+            userId: user.id,
+            userName: user.fullName,
+            totalProcessed: userCompletedAudits.length,
+            averageProcessingTime,
+            completionRate,
+            pendingCount
+          };
+        }));
+        
+        // Filter out null values from userMetrics
+        const filteredUserMetrics = userMetrics.filter(m => m !== null);
+        
+        // Calculate overall metrics
+        const totalProcessed = completedAudits.length;
+        const averageProcessingSeconds = filteredUserMetrics.reduce((acc, user) => {
+          return acc + (user!.averageProcessingTime * user!.totalProcessed);
+        }, 0) / (totalProcessed || 1); // Avoid division by zero
+        
+        // Get pending audit count
+        const pendingCount = allAudits.filter(a => 
+          a.status === "pending" || a.status === "in_progress" || a.status === "needs_info"
+        ).length;
+        
+        res.json({
+          users: filteredUserMetrics,
+          totalProcessed,
+          averageProcessingHours: Math.round(averageProcessingSeconds / 3600 * 10) / 10, // Convert to hours with 1 decimal
+          pendingCount
+        });
+      } 
+      else if (type === "time") {
+        // Get all completed audits in the date range
+        const allAudits = await storage.getAudits();
+        const completedAudits = allAudits.filter(audit => {
+          const updatedAt = new Date(audit.updatedAt);
+          return (
+            updatedAt >= startDate && 
+            updatedAt <= endDate && 
+            (audit.status === "approved" || audit.status === "rejected")
+          );
+        });
+        
+        // Group by day and calculate average processing time
+        const auditsByDay = new Map();
+        
+        for (const audit of completedAudits) {
+          const date = new Date(audit.updatedAt);
+          const dateStr = date.toISOString().substring(0, 10); // YYYY-MM-DD
+          
+          if (!auditsByDay.has(dateStr)) {
+            auditsByDay.set(dateStr, []);
+          }
+          
+          // Find when this audit was assigned
+          const events = await storage.getAuditEvents(audit.id);
+          const assignEvent = events.find(e => e.eventType === "assigned");
+          
+          if (assignEvent) {
+            const assignDate = new Date(assignEvent.timestamp);
+            const completedDate = new Date(audit.updatedAt);
+            const processingTime = (completedDate.getTime() - assignDate.getTime()) / 1000; // in seconds
+            
+            auditsByDay.get(dateStr).push({
+              processingTime,
+              audit
+            });
+          }
+        }
+        
+        // Calculate daily averages
+        const processingTimes = Array.from(auditsByDay.entries()).map(([date, audits]) => {
+          const totalTime = audits.reduce((total, current) => total + current.processingTime, 0);
+          const count = audits.length;
+          const averageTime = count > 0 ? totalTime / count : 0;
+          
+          return {
+            date,
+            averageTime,
+            count
+          };
+        });
+        
+        // Sort by date
+        processingTimes.sort((a, b) => a.date.localeCompare(b.date));
+        
+        // Calculate overall average
+        const totalTime = processingTimes.reduce((total, current) => 
+          total + (current.averageTime * current.count), 0);
+        const totalCount = processingTimes.reduce((count, current) => count + current.count, 0);
+        const overallAverage = totalCount > 0 ? totalTime / totalCount : 0;
+        
+        res.json({
+          processingTimes,
+          averageProcessingHours: Math.round(overallAverage / 3600 * 10) / 10 // Convert to hours with 1 decimal
+        });
+      } 
+      else {
+        return res.status(400).json({ error: "Invalid type parameter. Use 'users' or 'time'." });
+      }
+    } catch (error) {
+      handleApiError(res, error);
+    }
+  });
+  
   // Create a new audit (for testing purposes)
   app.post("/api/audits", ensureAuthenticated, async (req, res) => {
     try {
@@ -575,6 +754,249 @@ export async function registerRoutes(app: Express): Promise<Server> {
       global.io?.customEmit("audit-update", socketPayload);
       
       res.json({ success: true });
+    } catch (error) {
+      handleApiError(res, error);
+    }
+  });
+  
+  // Advanced search for audits
+  app.post("/api/audits/search", ensureAuthenticated, async (req, res) => {
+    try {
+      // Validate the request body with a flexible schema to allow partial criteria
+      const searchSchema = z.object({
+        auditNumber: z.string().optional(),
+        propertyId: z.string().optional(),
+        status: z.enum(["pending", "in_progress", "approved", "rejected", "needs_info"]).optional(),
+        priority: z.enum(["urgent", "high", "normal", "low"]).optional(),
+        submittedDateStart: z.string().optional().transform(val => val ? new Date(val) : undefined),
+        submittedDateEnd: z.string().optional().transform(val => val ? new Date(val) : undefined),
+        dueDateStart: z.string().optional().transform(val => val ? new Date(val) : undefined),
+        dueDateEnd: z.string().optional().transform(val => val ? new Date(val) : undefined),
+        assignedToId: z.number().optional(),
+        submittedById: z.number().optional(),
+        assessmentMin: z.number().optional(),
+        assessmentMax: z.number().optional(),
+      });
+      
+      const result = searchSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: "Invalid search criteria", details: result.error });
+      }
+      
+      // Get all audits and filter them based on criteria
+      const allAudits = await storage.getAudits();
+      
+      const { 
+        auditNumber, propertyId, status, priority, 
+        submittedDateStart, submittedDateEnd, 
+        dueDateStart, dueDateEnd,
+        assignedToId, submittedById,
+        assessmentMin, assessmentMax
+      } = result.data;
+      
+      const filteredAudits = allAudits.filter(audit => {
+        // Check each criterion if provided
+        if (auditNumber && !audit.auditNumber.toLowerCase().includes(auditNumber.toLowerCase())) {
+          return false;
+        }
+        
+        if (propertyId && !audit.propertyId.toLowerCase().includes(propertyId.toLowerCase())) {
+          return false;
+        }
+        
+        if (status && audit.status !== status) {
+          return false;
+        }
+        
+        if (priority && audit.priority !== priority) {
+          return false;
+        }
+        
+        if (submittedDateStart) {
+          const auditDate = new Date(audit.submittedAt);
+          if (auditDate < submittedDateStart) {
+            return false;
+          }
+        }
+        
+        if (submittedDateEnd) {
+          const auditDate = new Date(audit.submittedAt);
+          if (auditDate > submittedDateEnd) {
+            return false;
+          }
+        }
+        
+        if (dueDateStart) {
+          const dueDate = new Date(audit.dueDate);
+          if (dueDate < dueDateStart) {
+            return false;
+          }
+        }
+        
+        if (dueDateEnd) {
+          const dueDate = new Date(audit.dueDate);
+          if (dueDate > dueDateEnd) {
+            return false;
+          }
+        }
+        
+        if (assignedToId !== undefined) {
+          if (assignedToId === null) {
+            // Special case for unassigned audits
+            if (audit.assignedToId !== null) {
+              return false;
+            }
+          } else if (audit.assignedToId !== assignedToId) {
+            return false;
+          }
+        }
+        
+        if (submittedById !== undefined && audit.submittedById !== submittedById) {
+          return false;
+        }
+        
+        if (assessmentMin !== undefined && audit.currentAssessment < assessmentMin) {
+          return false;
+        }
+        
+        if (assessmentMax !== undefined && audit.currentAssessment > assessmentMax) {
+          return false;
+        }
+        
+        return true;
+      });
+      
+      // Return the filtered results
+      res.json(filteredAudits);
+      
+    } catch (error) {
+      handleApiError(res, error);
+    }
+  });
+
+  // Bulk actions for audits
+  app.post("/api/audits/bulk-action", ensureAuthenticated, async (req, res) => {
+    try {
+      // Validate the request body
+      const bulkActionSchema = z.object({
+        auditIds: z.array(z.number()).min(1, "Must provide at least one audit ID"),
+        action: z.enum(["approve", "reject", "request_info", "set_priority", "assign"]),
+        comment: z.string().optional(),
+        priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+        assignedToId: z.number().optional(),
+      });
+      
+      const result = bulkActionSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: "Invalid request body", details: result.error });
+      }
+      
+      const { auditIds, action, comment, priority, assignedToId } = result.data;
+      
+      // Process each audit
+      const results = await Promise.all(auditIds.map(async (auditId) => {
+        try {
+          const audit = await storage.getAuditById(auditId);
+          if (!audit) {
+            return { id: auditId, success: false, error: "Audit not found" };
+          }
+          
+          let updateData: Partial<Audit> = {};
+          let eventType = "";
+          
+          // Set update data based on action
+          switch (action) {
+            case "approve":
+              updateData.status = "approved";
+              eventType = "approved";
+              break;
+            case "reject":
+              updateData.status = "rejected";
+              eventType = "rejected";
+              break;
+            case "request_info":
+              updateData.status = "needs_info";
+              eventType = "requested_info";
+              break;
+            case "set_priority":
+              if (priority) {
+                updateData.priority = priority;
+                eventType = "priority_changed";
+              }
+              break;
+            case "assign":
+              if (assignedToId) {
+                // Validate that the assigned user exists
+                const user = await storage.getUser(assignedToId);
+                if (!user) {
+                  return { id: auditId, success: false, error: "Assigned user not found" };
+                }
+                
+                updateData.assignedToId = assignedToId;
+                
+                // If the audit is currently pending and being assigned, set it to in_progress
+                if (audit.status === "pending") {
+                  updateData.status = "in_progress";
+                }
+                
+                eventType = "assigned";
+              }
+              break;
+          }
+          
+          // Update the audit
+          if (Object.keys(updateData).length === 0) {
+            return { id: auditId, success: false, error: "No valid update data" };
+          }
+          
+          const updatedAudit = await storage.updateAudit(auditId, updateData);
+          if (!updatedAudit) {
+            return { id: auditId, success: false, error: "Failed to update audit" };
+          }
+          
+          // Create an audit event
+          const auditEvent = await storage.createAuditEvent({
+            auditId,
+            userId: req.user!.id,
+            eventType,
+            comment,
+            changes: {
+              before: action === "set_priority" ? { priority: audit.priority } : 
+                     action === "assign" ? { assignedToId: audit.assignedToId } : { status: audit.status },
+              after: action === "set_priority" ? { priority } : 
+                     action === "assign" ? { assignedToId } : { status: updateData.status },
+            },
+            timestamp: new Date(),
+          });
+          
+          // Broadcast the update to all connected clients
+          const socketPayload = {
+            type: "AUDIT_UPDATED",
+            audit: updatedAudit,
+            event: auditEvent,
+            bulkAction: true,
+          };
+          global.io?.customEmit("audit-update", socketPayload);
+          
+          return { id: auditId, success: true, audit: updatedAudit, event: auditEvent };
+        } catch (error) {
+          console.error(`Error processing audit ID ${auditId}:`, error);
+          return { id: auditId, success: false, error: error instanceof Error ? error.message : "Unknown error" };
+        }
+      }));
+      
+      // Check if all updates were successful
+      const allSuccessful = results.every(result => result.success);
+      
+      if (allSuccessful) {
+        res.json({ success: true, results });
+      } else {
+        res.status(207).json({
+          partialSuccess: true,
+          message: "Some audits could not be processed",
+          results
+        });
+      }
     } catch (error) {
       handleApiError(res, error);
     }

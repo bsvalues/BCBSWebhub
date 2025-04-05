@@ -6,6 +6,7 @@ import LiveAuditLog from "@/components/live-audit-log";
 import PerformanceChart from "@/components/performance-chart";
 import AuditItem from "@/components/audit-item";
 import AuditDetailModal from "@/components/audit-detail-modal";
+import WorkloadMetrics from "@/components/analytics/workload-metrics";
 import { Audit } from "@shared/schema";
 
 export default function Dashboard() {
@@ -84,6 +85,11 @@ export default function Dashboard() {
             trend={{ value: "3.2%", isPositive: true, text: "3.2% from last week" }}
             iconBgColor="bg-red-100"
           />
+        </div>
+        
+        {/* Workload Metrics */}
+        <div className="mt-6 mb-8">
+          <WorkloadMetrics />
         </div>
         
         {/* Main content area */}
