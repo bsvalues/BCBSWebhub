@@ -10,9 +10,9 @@ export function ProtectedRoute({
   path: string;
   component: () => React.JSX.Element;
 }) {
-  const { user, isLoading } = useAuth();
+  const auth = useAuth();
 
-  if (isLoading) {
+  if (auth.isLoading) {
     return (
       <Route path={path}>
         <div className="flex items-center justify-center min-h-screen">
@@ -22,7 +22,7 @@ export function ProtectedRoute({
     );
   }
 
-  if (!user) {
+  if (!auth.user) {
     return (
       <Route path={path}>
         <Redirect to="/auth" />

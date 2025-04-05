@@ -33,14 +33,14 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 export default function AuthPage() {
   const [activeTab, setActiveTab] = useState("login");
   const [location, navigate] = useLocation();
-  const { user, isLoading, loginMutation, registerMutation } = useAuth();
+  const auth = useAuth();
 
   // Effect to redirect authenticated users
   useEffect(() => {
-    if (user) {
+    if (auth.user) {
       navigate("/");
     }
-  }, [user, navigate]);
+  }, [auth.user, navigate]);
 
   // Login form
   const loginForm = useForm<LoginFormValues>({
@@ -65,7 +65,7 @@ export default function AuthPage() {
 
   // Handle login submission
   const onLoginSubmit = (data: LoginFormValues) => {
-    loginMutation.mutate(data, {
+    auth.loginMutation.mutate(data, {
       onSuccess: () => {
         navigate("/");
       },
@@ -77,7 +77,7 @@ export default function AuthPage() {
     // Remove confirmPassword as it's not in the schema
     const { confirmPassword, ...registrationData } = data;
     
-    registerMutation.mutate(registrationData, {
+    auth.registerMutation.mutate(registrationData, {
       onSuccess: () => {
         navigate("/");
       },
@@ -85,7 +85,7 @@ export default function AuthPage() {
   };
 
   // Show loading state while checking authentication
-  if (isLoading) {
+  if (auth.isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full"></div>
@@ -150,9 +150,9 @@ export default function AuthPage() {
                     <Button 
                       type="submit" 
                       className="w-full" 
-                      disabled={loginMutation.isPending}
+                      disabled={auth.loginMutation.isPending}
                     >
-                      {loginMutation.isPending ? "Logging in..." : "Log In"}
+                      {auth.loginMutation.isPending ? "Logging in..." : "Log In"}
                     </Button>
                   </form>
                 </Form>
@@ -257,9 +257,9 @@ export default function AuthPage() {
                     <Button 
                       type="submit" 
                       className="w-full" 
-                      disabled={registerMutation.isPending}
+                      disabled={auth.registerMutation.isPending}
                     >
-                      {registerMutation.isPending ? "Creating Account..." : "Create Account"}
+                      {auth.registerMutation.isPending ? "Creating Account..." : "Create Account"}
                     </Button>
                   </form>
                 </Form>

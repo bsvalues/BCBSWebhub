@@ -21,19 +21,8 @@ type AuthContextType = {
 // Type for login data 
 type LoginData = Pick<InsertUser, "username" | "password">;
 
-// Create a default auth context to avoid the null check
-const defaultAuthContext: AuthContextType = {
-  user: null,
-  isLoading: false,
-  error: null,
-  // These will be properly initialized in the provider
-  loginMutation: {} as UseMutationResult<SelectUser, Error, LoginData>,
-  logoutMutation: {} as UseMutationResult<void, Error, void>,
-  registerMutation: {} as UseMutationResult<SelectUser, Error, InsertUser>,
-};
-
-// Create the auth context with the default value
-export const AuthContext = createContext<AuthContextType>(defaultAuthContext);
+// Create the auth context without default values
+export const AuthContext = createContext<AuthContextType | null>(null);
 
 // Auth provider component
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -151,6 +140,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 // Custom hook to use the auth context
-export function useAuth() {
-  return useContext(AuthContext);
+export function useAuth(): AuthContextType {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 }

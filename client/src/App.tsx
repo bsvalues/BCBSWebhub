@@ -1,19 +1,22 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
 import AuditQueue from "@/pages/audit-queue";
 import Analytics from "@/pages/analytics";
 import AuditHistory from "@/pages/audit-history";
-import MainLayout from "@/layouts/main-layout";
-import { useAuth } from "@/hooks/use-auth";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import ConnectionAlert from "./components/connection-alert";
 import { Loader2 } from "lucide-react";
+import MainLayout from "@/layouts/main-layout";
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth();
+// Inner App component that relies on AuthContext
+function AuthenticatedApp() {
+  const auth = useAuth();
+  const [location, navigate] = useLocation();
   
-  if (isLoading) {
+  // Show loading spinner while checking authentication
+  if (auth.isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-border" />
@@ -21,60 +24,47 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
   
-  if (!user) {
-    return <Redirect to="/auth" />;
+  // Handle auth redirects
+  if (!auth.user && location !== "/auth") {
+    navigate("/auth");
+    return null;
+  } else if (auth.user && location === "/auth") {
+    navigate("/");
+    return null;
   }
   
-  return <MainLayout>{children}</MainLayout>;
-}
-
-function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
-  return (
-    <ProtectedRoute>
-      <Component />
-    </ProtectedRoute>
-  );
-}
-
-function LoginRoute() {
-  const { user, isLoading } = useAuth();
-  
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-border" />
-      </div>
-    );
-  }
-  
-  if (user) {
-    return <Redirect to="/" />;
-  }
-  
-  return <AuthPage />;
-}
-
-function App() {
+  // Render the appropriate page based on the route
   return (
     <>
       <ConnectionAlert />
-      <Switch>
-        <Route path="/auth" component={LoginRoute} />
-        <Route path="/">
-          <AuthenticatedRoute component={Dashboard} />
-        </Route>
-        <Route path="/audit-queue">
-          <AuthenticatedRoute component={AuditQueue} />
-        </Route>
-        <Route path="/analytics">
-          <AuthenticatedRoute component={Analytics} />
-        </Route>
-        <Route path="/audit-history">
-          <AuthenticatedRoute component={AuditHistory} />
-        </Route>
-        <Route component={NotFound} />
-      </Switch>
+      {auth.user ? (
+        <MainLayout>
+          <Switch>
+            <Route path="/" component={Dashboard} />
+            <Route path="/audit-queue" component={AuditQueue} />
+            <Route path="/analytics" component={Analytics} />
+            <Route path="/audit-history" component={AuditHistory} />
+            <Route component={NotFound} />
+          </Switch>
+        </MainLayout>
+      ) : (
+        <Switch>
+          <Route path="/auth" component={AuthPage} />
+          <Route>
+            <Redirect to="/auth" />
+          </Route>
+        </Switch>
+      )}
     </>
+  );
+}
+
+// Root App component that provides the AuthProvider
+function App() {
+  return (
+    <AuthProvider>
+      <AuthenticatedApp />
+    </AuthProvider>
   );
 }
 
