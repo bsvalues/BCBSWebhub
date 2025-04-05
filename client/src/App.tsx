@@ -1,3 +1,4 @@
+import React, { useEffect } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
@@ -15,6 +16,17 @@ function AuthenticatedApp() {
   const auth = useAuth();
   const [location, navigate] = useLocation();
   
+  // Use useEffect for navigation to avoid state updates during render
+  useEffect(() => {
+    if (auth.isLoading) return; // Skip navigation logic during loading
+    
+    if (!auth.user && location !== "/auth") {
+      navigate("/auth");
+    } else if (auth.user && location === "/auth") {
+      navigate("/");
+    }
+  }, [auth.user, auth.isLoading, location, navigate]);
+  
   // Show loading spinner while checking authentication
   if (auth.isLoading) {
     return (
@@ -22,15 +34,6 @@ function AuthenticatedApp() {
         <Loader2 className="h-8 w-8 animate-spin text-border" />
       </div>
     );
-  }
-  
-  // Handle auth redirects
-  if (!auth.user && location !== "/auth") {
-    navigate("/auth");
-    return null;
-  } else if (auth.user && location === "/auth") {
-    navigate("/");
-    return null;
   }
   
   // Render the appropriate page based on the route

@@ -6,6 +6,7 @@ import connectPg from "connect-pg-simple";
 import session from "express-session";
 import { Pool } from "@neondatabase/serverless";
 import { IStorage } from "./storage";
+import * as bcrypt from "bcrypt";
 
 export class DatabaseStorage implements IStorage {
   sessionStore: any; // Using any to avoid SessionStore type error
@@ -168,18 +169,18 @@ export class DatabaseStorage implements IStorage {
     
     console.log("Seeding database with initial data...");
     
-    // Create admin user with a standard bcrypt hash for "admin123"
+    // Create users with proper bcrypt hashing
     const admin = await this.createUser({
       username: "admin",
-      password: "$2b$10$rJ8DLkDMWXqpXkTKzYqUGufXfb5RrxA/eMYVZJ/a1SFu.kZaLTz1q", // "admin123"
+      password: await bcrypt.hash("password123", 10), // Simple test password
       fullName: "Administrator",
       role: "admin"
     });
     
     // Create auditor user
     const auditor = await this.createUser({
-      username: "john.doe",
-      password: "$2b$10$rJ8DLkDMWXqpXkTKzYqUGufXfb5RrxA/eMYVZJ/a1SFu.kZaLTz1q", // "admin123"
+      username: "auditor",
+      password: await bcrypt.hash("password123", 10), // Simple test password
       fullName: "John Doe",
       role: "auditor"
     });
