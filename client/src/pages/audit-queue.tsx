@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import Header from "@/components/header";
 import AuditItem from "@/components/audit-item";
 import AuditDetailModal from "@/components/audit-detail-modal";
 import { Audit } from "@shared/schema";
+import { PlusCircle } from "lucide-react";
 
 export default function AuditQueue() {
   const [selectedAudit, setSelectedAudit] = useState<Audit | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [_, setLocation] = useLocation();
 
   // Fetch pending audits
   const { data: pendingAudits, isLoading } = useQuery<Audit[]>({
@@ -29,12 +32,26 @@ export default function AuditQueue() {
   const closeModal = () => {
     setIsModalOpen(false);
   };
+  
+  const navigateToCreateAudit = () => {
+    setLocation("/create-audit");
+  };
 
   return (
     <>
       <Header title="Audit Queue" />
       
       <main className="flex-1 overflow-y-auto pt-16 md:pt-0 pb-4 px-4 md:px-6">
+        <div className="flex justify-between items-center my-6">
+          <h2 className="text-2xl font-bold">Audit Queue</h2>
+          <button 
+            onClick={navigateToCreateAudit}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md flex items-center hover:bg-blue-700"
+          >
+            <PlusCircle className="h-4 w-4 mr-2" />
+            Create New Audit
+          </button>
+        </div>
         <div className="my-6">
           <div className="bg-white rounded-lg shadow-md">
             <div className="px-6 py-4 border-b border-neutral-200 flex flex-col md:flex-row justify-between md:items-center">

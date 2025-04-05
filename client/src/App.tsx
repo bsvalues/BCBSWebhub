@@ -4,6 +4,7 @@ import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
 import AuditQueue from "@/pages/audit-queue";
+import CreateAudit from "@/pages/create-audit";
 import Analytics from "@/pages/analytics";
 import AuditHistory from "@/pages/audit-history";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
@@ -45,6 +46,7 @@ function AuthenticatedApp() {
           <Switch>
             <Route path="/" component={Dashboard} />
             <Route path="/audit-queue" component={AuditQueue} />
+            <Route path="/create-audit" component={CreateAudit} />
             <Route path="/analytics" component={Analytics} />
             <Route path="/audit-history" component={AuditHistory} />
             <Route component={NotFound} />
