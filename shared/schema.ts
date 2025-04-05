@@ -80,6 +80,23 @@ export const insertAuditEventSchema = createInsertSchema(auditEvents).omit({
   id: true,
 });
 
+// Document model for storing audit documents
+export const documents = pgTable("documents", {
+  id: serial("id").primaryKey(),
+  auditId: integer("audit_id").notNull(),
+  filename: text("filename").notNull(),
+  fileType: text("file_type").notNull(),
+  fileSize: integer("file_size").notNull(),
+  fileKey: text("file_key").notNull(), // For cloud storage reference
+  uploadedById: integer("uploaded_by_id").notNull(),
+  uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+});
+
+// Create document schema
+export const insertDocumentSchema = createInsertSchema(documents).omit({
+  id: true,
+});
+
 // Type exports
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -89,3 +106,6 @@ export type InsertAudit = z.infer<typeof insertAuditSchema>;
 
 export type AuditEvent = typeof auditEvents.$inferSelect;
 export type InsertAuditEvent = z.infer<typeof insertAuditEventSchema>;
+
+export type Document = typeof documents.$inferSelect;
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;

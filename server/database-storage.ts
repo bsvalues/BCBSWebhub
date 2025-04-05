@@ -1,11 +1,11 @@
-import { users, audits, auditEvents, type User, type InsertUser, type Audit, type InsertAudit, type AuditEvent, type InsertAuditEvent } from "@shared/schema";
+import { users, audits, auditEvents, documents, type User, type InsertUser, type Audit, type InsertAudit, type AuditEvent, type InsertAuditEvent, type Document, type InsertDocument } from "@shared/schema";
 import type { json } from "drizzle-orm/pg-core";
 import { eq, desc, and, asc } from "drizzle-orm";
 import { db } from "./db";
 import connectPg from "connect-pg-simple";
 import session from "express-session";
 import { Pool } from "@neondatabase/serverless";
-import { IStorage } from "./storage";
+import { IStorage, DocumentWithUrl } from "./storage";
 import * as bcrypt from "bcrypt";
 
 export class DatabaseStorage implements IStorage {
@@ -164,6 +164,36 @@ export class DatabaseStorage implements IStorage {
     
     const results = await db.insert(auditEvents).values(event).returning();
     return results[0];
+  }
+  
+  // Document operations
+  async getDocuments(auditId: number): Promise<DocumentWithUrl[]> {
+    const results = await db
+      .select()
+      .from(documents)
+      .where(eq(documents.auditId, auditId))
+      .orderBy(desc(documents.uploadedAt));
+      
+    // Add URL to each document
+    return results.map(doc => ({
+      ...doc,
+      url: `/api/documents/${doc.id}/download` // URL for downloading the document
+    }));
+  }
+  
+  async getDocumentById(id: number): Promise<Document | undefined> {
+    const results = await db.select().from(documents).where(eq(documents.id, id));
+    return results.length > 0 ? results[0] : undefined;
+  }
+  
+  async createDocument(insertDocument: InsertDocument): Promise<Document> {
+    const results = await db.insert(documents).values(insertDocument).returning();
+    return results[0];
+  }
+  
+  async deleteDocument(id: number): Promise<boolean> {
+    const results = await db.delete(documents).where(eq(documents.id, id)).returning();
+    return results.length > 0;
   }
   
   // Initialize the database with seed data

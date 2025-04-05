@@ -8,6 +8,8 @@ import { Loader2 } from "lucide-react";
 import UserAssignment from "./user-assignment";
 import CommentForm from "./comment-form";
 import AuditEventsList from "./audit-events-list";
+import DocumentUpload from "./document-upload";
+import AuditExport from "./audit-export";
 
 interface AuditDetailModalProps {
   audit: Audit | null;
@@ -189,6 +191,12 @@ export default function AuditDetailModal({ audit, isOpen, onClose }: AuditDetail
                 >
                   Documents
                 </button>
+                <button 
+                  className={`px-1 py-2 border-b-2 ${activeTab === "export" ? "border-blue-600 text-blue-600" : "border-transparent text-neutral-600 hover:text-neutral-900"} font-medium`}
+                  onClick={() => setActiveTab("export")}
+                >
+                  Export
+                </button>
               </div>
             </div>
             
@@ -344,16 +352,14 @@ export default function AuditDetailModal({ audit, isOpen, onClose }: AuditDetail
             )}
             
             {activeTab === "documents" && (
-              <div className="mt-6 p-8 text-center bg-neutral-50 rounded-lg border border-dashed border-neutral-300">
-                <span className="material-icons text-4xl text-neutral-400 mb-2">description</span>
-                <h5 className="font-medium text-neutral-800 mb-2">No Documents Attached</h5>
-                <p className="text-sm text-neutral-500 mb-4">
-                  There are no documents attached to this audit yet.
-                </p>
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-md flex items-center hover:bg-blue-700 mx-auto">
-                  <span className="material-icons text-sm mr-1">upload_file</span>
-                  Upload Document
-                </button>
+              <div className="mt-6">
+                <DocumentUpload auditId={audit.id} />
+              </div>
+            )}
+            
+            {activeTab === "export" && (
+              <div className="mt-6">
+                <AuditExport audit={audit} />
               </div>
             )}
           </div>
