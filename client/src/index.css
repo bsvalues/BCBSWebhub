@@ -4,24 +4,35 @@
 
 @layer base {
   :root {
-    --shadow-color: 210 40% 12%;
+    --shadow-color: 210 30% 10%;
     --shadow-elevation-low:
-      0px 0.3px 0.5px hsl(var(--shadow-color) / 0.1),
-      0px 0.4px 0.8px -1.2px hsl(var(--shadow-color) / 0.1),
-      0px 1px 2px -2.5px hsl(var(--shadow-color) / 0.1);
+      0px 0.2px 0.3px hsl(var(--shadow-color) / 0.07),
+      0px 0.3px 0.5px -1.2px hsl(var(--shadow-color) / 0.07),
+      0px 0.7px 1.4px -2.5px hsl(var(--shadow-color) / 0.07);
     --shadow-elevation-medium:
-      0px 0.3px 0.5px hsl(var(--shadow-color) / 0.11),
-      0px 1.1px 2.2px -0.8px hsl(var(--shadow-color) / 0.11),
-      0px 2.8px 5.6px -1.7px hsl(var(--shadow-color) / 0.11),
-      0px 6.7px 13.4px -2.5px hsl(var(--shadow-color) / 0.11);
+      0px 0.2px 0.3px hsl(var(--shadow-color) / 0.08),
+      0px 0.8px 1.6px -0.8px hsl(var(--shadow-color) / 0.08),
+      0px 2.2px 4.4px -1.7px hsl(var(--shadow-color) / 0.08),
+      0px 5.3px 10.6px -2.5px hsl(var(--shadow-color) / 0.08);
     --shadow-elevation-high:
-      0px 0.3px 0.5px hsl(var(--shadow-color) / 0.1),
-      0px 1.8px 3.6px -0.4px hsl(var(--shadow-color) / 0.1),
-      0px 3.6px 7.1px -0.7px hsl(var(--shadow-color) / 0.1),
-      0px 5.9px 11.7px -1.1px hsl(var(--shadow-color) / 0.1),
-      0px 9.7px 19.4px -1.4px hsl(var(--shadow-color) / 0.1),
-      0px 15.9px 31.8px -1.8px hsl(var(--shadow-color) / 0.1),
-      0px 25px 50px -2.1px hsl(var(--shadow-color) / 0.1);
+      0px 0.2px 0.3px hsl(var(--shadow-color) / 0.07),
+      0px 1.3px 2.6px -0.4px hsl(var(--shadow-color) / 0.07),
+      0px 2.8px 5.6px -0.7px hsl(var(--shadow-color) / 0.07),
+      0px 4.6px 9.2px -1.1px hsl(var(--shadow-color) / 0.07),
+      0px 7.6px 15.2px -1.4px hsl(var(--shadow-color) / 0.07),
+      0px 12.4px 24.8px -1.8px hsl(var(--shadow-color) / 0.07),
+      0px 19px 38px -2.1px hsl(var(--shadow-color) / 0.07);
+    
+    /* Grid-like pattern for spreadsheet feel */
+    --grid-color: rgba(0, 0, 0, 0.06);
+    --grid-size: 24px;
+    
+    /* Analytics accent colors */
+    --chart-accent-1: #4285F4;
+    --chart-accent-2: #34A853; 
+    --chart-accent-3: #FBBC05;
+    --chart-accent-4: #EA4335;
+    --chart-accent-5: #8966B9;
   }
 
   * {
@@ -203,4 +214,139 @@
 /* Clean lines for containers */
 .clean-panel {
   @apply rounded-lg bg-card border-subtle p-5 card-depth;
+}
+
+/* Spreadsheet-inspired components */
+.grid-table {
+  @apply w-full border-collapse;
+}
+
+.grid-table th {
+  @apply bg-muted/40 text-muted-foreground font-medium text-xs uppercase tracking-wider px-3 py-2 
+         border border-border/50 sticky top-0 z-10;
+}
+
+.grid-table td {
+  @apply px-3 py-2 border border-border/40 text-sm;
+}
+
+.grid-table tr:nth-child(even) {
+  @apply bg-muted/10;
+}
+
+.grid-table tr:hover {
+  @apply bg-muted/30;
+}
+
+/* Cell styling for editable fields */
+.editable-cell {
+  @apply relative cursor-text;
+}
+
+.editable-cell:hover::before {
+  content: '';
+  @apply absolute inset-0 border-2 border-primary/40 pointer-events-none;
+}
+
+/* Analytics dashboard components */
+.stat-card {
+  @apply flex flex-col p-4 bg-card border-subtle rounded-md;
+}
+
+.stat-title {
+  @apply text-sm font-medium text-muted-foreground mb-1;
+}
+
+.stat-value {
+  @apply text-2xl font-bold;
+}
+
+.stat-description {
+  @apply text-xs text-muted-foreground mt-1;
+}
+
+.stat-trend {
+  @apply flex items-center text-xs mt-2;
+}
+
+.stat-trend.positive {
+  @apply text-green-600;
+}
+
+.stat-trend.negative {
+  @apply text-red-600;
+}
+
+/* Audit-specific components */
+.audit-grid {
+  @apply grid gap-4;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.audit-card {
+  @apply clean-panel flex flex-col h-full;
+}
+
+.audit-card-header {
+  @apply flex justify-between items-start border-b border-border/40 pb-3 mb-3;
+}
+
+.audit-card-body {
+  @apply flex-grow space-y-3;
+}
+
+.audit-card-footer {
+  @apply flex justify-between items-center pt-3 mt-3 border-t border-border/40;
+}
+
+/* Filter and search components */
+.filter-bar {
+  @apply flex flex-wrap gap-2 p-3 bg-muted/20 rounded-md border-subtle mb-4;
+}
+
+.filter-chip {
+  @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs bg-background border-subtle;
+}
+
+.filter-chip .close {
+  @apply ml-1.5 h-3.5 w-3.5 text-muted-foreground hover:text-foreground;
+}
+
+/* Soft UI elements for controls */
+.soft-control {
+  @apply bg-background/80 hover:bg-background border-subtle rounded-md px-3 py-1.5 
+         shadow-sm transition-colors text-sm;
+}
+
+.soft-control.active {
+  @apply bg-primary/10 border-primary/30 text-primary;
+}
+
+/* Audit status timeline */
+.status-timeline {
+  @apply flex items-center space-x-1 py-2;
+}
+
+.status-step {
+  @apply flex flex-col items-center;
+}
+
+.status-dot {
+  @apply h-3 w-3 rounded-full border-2 border-muted z-10;
+}
+
+.status-dot.completed {
+  @apply bg-primary border-primary;
+}
+
+.status-dot.current {
+  @apply bg-background border-primary;
+}
+
+.status-line {
+  @apply h-0.5 w-10 bg-muted;
+}
+
+.status-line.completed {
+  @apply bg-primary;
 }
