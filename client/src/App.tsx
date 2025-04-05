@@ -1,5 +1,4 @@
-import { Switch, Route, Redirect, useLocation } from "wouter";
-import { Toaster } from "@/components/ui/toaster";
+import { Switch, Route, Redirect } from "wouter";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
@@ -11,8 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import ConnectionAlert from "./components/connection-alert";
 import { Loader2 } from "lucide-react";
 
-// Basic authenticated route component
-const PrivateRoute = ({ component: Component }: { component: React.ComponentType }) => {
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   
   if (isLoading) {
@@ -27,15 +25,18 @@ const PrivateRoute = ({ component: Component }: { component: React.ComponentType
     return <Redirect to="/auth" />;
   }
   
-  return (
-    <MainLayout>
-      <Component />
-    </MainLayout>
-  );
-};
+  return <MainLayout>{children}</MainLayout>;
+}
 
-// Auth route - redirects to dashboard if already logged in
-const AuthRoute = () => {
+function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
+  return (
+    <ProtectedRoute>
+      <Component />
+    </ProtectedRoute>
+  );
+}
+
+function LoginRoute() {
   const { user, isLoading } = useAuth();
   
   if (isLoading) {
@@ -51,33 +52,28 @@ const AuthRoute = () => {
   }
   
   return <AuthPage />;
-};
+}
 
 function App() {
   return (
     <>
+      <ConnectionAlert />
       <Switch>
-        <Route path="/auth">
-          <AuthRoute />
-        </Route>
+        <Route path="/auth" component={LoginRoute} />
         <Route path="/">
-          <PrivateRoute component={Dashboard} />
+          <AuthenticatedRoute component={Dashboard} />
         </Route>
         <Route path="/audit-queue">
-          <PrivateRoute component={AuditQueue} />
+          <AuthenticatedRoute component={AuditQueue} />
         </Route>
         <Route path="/analytics">
-          <PrivateRoute component={Analytics} />
+          <AuthenticatedRoute component={Analytics} />
         </Route>
         <Route path="/audit-history">
-          <PrivateRoute component={AuditHistory} />
+          <AuthenticatedRoute component={AuditHistory} />
         </Route>
-        <Route>
-          <NotFound />
-        </Route>
+        <Route component={NotFound} />
       </Switch>
-      <Toaster />
-      <ConnectionAlert />
     </>
   );
 }
