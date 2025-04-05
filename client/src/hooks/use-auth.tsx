@@ -48,23 +48,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     mutationFn: async (credentials: LoginData) => {
       console.log("Login attempt:", credentials.username);
       const res = await apiRequest("POST", "/api/login", credentials);
+      
+      // Wait for the session to be fully established before continuing
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       const userData = await res.json();
       console.log("Login response:", userData);
       return userData;
     },
     onSuccess: (user: SelectUser) => {
       console.log("Login successful:", user.username);
+      
+      // Update cache with user data
       queryClient.setQueryData(["/api/user"], user);
+      
       toast({
         title: "Login successful",
         description: `Welcome back, ${user.fullName}!`,
       });
       
-      // Force immediate refetch of user data to ensure session is established
+      // Give the browser time to save the cookie, then refetch
       setTimeout(() => {
         console.log("Refetching user data after login");
+        queryClient.invalidateQueries({ queryKey: ["/api/user"] });
         refetch();
-      }, 100);
+      }, 500);
     },
     onError: (error: Error) => {
       console.error("Login error:", error.message);

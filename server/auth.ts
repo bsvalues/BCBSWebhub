@@ -43,16 +43,19 @@ async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
+  // Use a fixed session secret for development
+  const SESSION_SECRET = "county-audit-hub-secret-key-very-secure-and-long-enough";
+
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET || "county-audit-hub-secret",
-    resave: true,
-    saveUninitialized: false, // Only save sessions that are modified
+    secret: SESSION_SECRET,
+    resave: true, // Forces the session to be saved back to the store
+    saveUninitialized: true, // Forces a session that is "uninitialized" to be saved to the store
     rolling: true, // Reset cookie expiration on each request
     store: storage.sessionStore,
     name: 'county_audit_sid', // Custom name to avoid conflicts
     cookie: {
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      secure: false, // Set to true in production with https
+      secure: false, // Must be false for HTTP development
       sameSite: 'lax',
       httpOnly: true,
       path: '/'

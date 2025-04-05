@@ -21,20 +21,37 @@ export async function apiRequest(
 ): Promise<Response> {
   console.log(`Making ${method} request to ${url}`, data ? 'with data' : 'without data');
   
-  const res = await fetch(url, {
+  // Create fetch options with proper credentials handling
+  const options: RequestInit = {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      // Add cache control to prevent browser caching
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      "Pragma": "no-cache",
+    },
     body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-  });
-
-  console.log(`${method} response from ${url}:`, res.status, res.statusText);
+    credentials: "include", // Always include credentials
+    cache: "no-store", // Prevent caching
+    mode: "cors", // Enable CORS
+  };
   
-  if (!res.ok) {
-    await throwIfResNotOk(res);
+  // Make the fetch request
+  try {
+    const res = await fetch(url, options);
+    
+    console.log(`${method} response from ${url}:`, res.status, res.statusText);
+    
+    // Handle error responses
+    if (!res.ok) {
+      await throwIfResNotOk(res);
+    }
+    
+    return res;
+  } catch (error) {
+    console.error(`Error in ${method} request to ${url}:`, error);
+    throw error;
   }
-  
-  return res;
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
@@ -45,24 +62,40 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     console.log('Query fetch:', queryKey[0]);
     
-    const res = await fetch(queryKey[0] as string, {
-      credentials: "include",
-    });
+    // Use the same options as apiRequest for consistency
+    const options: RequestInit = {
+      method: "GET",
+      headers: {
+        // Add cache control to prevent browser caching
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+      },
+      credentials: "include", // Always include credentials
+      cache: "no-store", // Prevent caching
+      mode: "cors", // Enable CORS
+    };
     
-    console.log('Query response status:', res.status);
-
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      console.log('Handling 401 as null return');
-      return null;
+    try {
+      const res = await fetch(queryKey[0] as string, options);
+      
+      console.log('Query response status:', res.status);
+  
+      if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+        console.log('Handling 401 as null return');
+        return null;
+      }
+  
+      if (!res.ok) {
+        await throwIfResNotOk(res);
+      }
+      
+      const data = await res.json();
+      console.log('Query response data:', data ? 'received' : 'empty');
+      return data;
+    } catch (error) {
+      console.error(`Error in query to ${queryKey[0]}:`, error);
+      throw error;
     }
-
-    if (!res.ok) {
-      await throwIfResNotOk(res);
-    }
-    
-    const data = await res.json();
-    console.log('Query response data:', data ? 'received' : 'empty');
-    return data;
   };
 
 export const queryClient = new QueryClient({
