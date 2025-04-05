@@ -86,11 +86,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: `Welcome back, ${user.fullName}!`,
       });
       
-      // Give the browser time to save the cookie, then refetch
+      // Force page reload to ensure proper cookie handling
       setTimeout(() => {
-        console.log("Refetching user data after login");
-        queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-        refetch();
+        window.location.href = "/";
       }, 500);
     },
     onError: (error: Error) => {
@@ -140,11 +138,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: `Welcome, ${user.fullName}!`,
       });
       
-      // Force immediate refetch of user data to ensure session is established
+      // Force page reload to ensure proper cookie handling
       setTimeout(() => {
-        console.log("Refetching user data after registration");
-        refetch();
-      }, 100);
+        window.location.href = "/";
+      }, 500);
     },
     onError: (error: Error) => {
       console.error("Registration error:", error.message);
@@ -189,11 +186,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: "You have been successfully logged out.",
       });
       
-      // Force immediate refetch of user data to confirm logout
+      // Redirect to auth page after logout
       setTimeout(() => {
-        console.log("Refetching user data after logout");
-        refetch();
-      }, 100);
+        window.location.href = "/auth";
+      }, 500);
     },
     onError: (error: Error) => {
       console.error("Logout error:", error.message);

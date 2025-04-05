@@ -60,11 +60,11 @@ export function setupAuth(app: Express) {
 
   const sessionSettings: session.SessionOptions = {
     secret: SESSION_SECRET,
-    resave: false, // Don't save session if unmodified
-    saveUninitialized: false, // Don't create session until something stored
+    resave: true, // Save the session even if unmodified
+    saveUninitialized: true, // Save uninitialized sessions
     rolling: true, // Reset cookie expiration on each request
     store: storage.sessionStore,
-    name: 'county_audit_sid', // Custom name to avoid conflicts
+    name: 'connect.sid', // Use default name for compatibility
     cookie: {
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
       secure: false, // Must be false for HTTP development
@@ -187,7 +187,7 @@ export function setupAuth(app: Express) {
         }
         
         console.log("User logged out successfully and session destroyed");
-        res.clearCookie('county_audit_sid');
+        res.clearCookie('connect.sid');
         res.sendStatus(200);
       });
     });
