@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { insertUserSchema } from "@shared/schema";
+import { Loader2, CheckCircle, BarChart3, Shield, ClipboardList } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 // Login schema
 const loginSchema = z.object({
@@ -87,35 +89,36 @@ export default function AuthPage() {
   // Show loading state while checking authentication
   if (auth.isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full"></div>
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+          <p className="text-foreground font-medium">Validating credentials...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-neutral-50">
+    <div className="min-h-screen flex flex-col md:flex-row bg-background">
       {/* Left Section (Form) */}
       <div className="flex-1 flex items-center justify-center p-6">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6">
-            <div className="flex justify-center mb-6">
-              <div className="flex items-center text-2xl font-bold text-blue-600">
-                <svg className="h-8 w-8 mr-2" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-14h2v7h-2zm0 8h2v2h-2z"/>
-                </svg>
-                County Audit Hub
+        <Card className="w-full max-w-md shadow-lg border-border/50">
+          <CardContent className="pt-8 px-8">
+            <div className="flex justify-center mb-8">
+              <div className="countyaudit-brand text-2xl font-bold flex items-center gap-2">
+                <ClipboardList className="h-7 w-7" />
+                <span>County Audit Hub</span>
               </div>
             </div>
 
-            <Tabs defaultValue="login" value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid grid-cols-2 mb-6">
-                <TabsTrigger value="login">Login</TabsTrigger>
-                <TabsTrigger value="register">Register</TabsTrigger>
+            <Tabs defaultValue="login" value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid grid-cols-2 mb-8 w-full">
+                <TabsTrigger value="login" className="text-sm font-medium">Sign In</TabsTrigger>
+                <TabsTrigger value="register" className="text-sm font-medium">Create Account</TabsTrigger>
               </TabsList>
 
               {/* Login Tab */}
-              <TabsContent value="login">
+              <TabsContent value="login" className="mt-0">
                 <h2 className="text-xl font-bold text-center mb-6">Welcome Back</h2>
                 <Form {...loginForm}>
                   <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
@@ -124,9 +127,13 @@ export default function AuthPage() {
                       name="username"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Username</FormLabel>
+                          <FormLabel className="text-foreground/80">Username</FormLabel>
                           <FormControl>
-                            <Input placeholder="Enter your username" {...field} />
+                            <Input 
+                              placeholder="Enter your username" 
+                              className="bg-background hover:bg-card/80 focus:bg-card/80 transition-colors"
+                              {...field} 
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -138,9 +145,14 @@ export default function AuthPage() {
                       name="password"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Password</FormLabel>
+                          <FormLabel className="text-foreground/80">Password</FormLabel>
                           <FormControl>
-                            <Input type="password" placeholder="Enter your password" {...field} />
+                            <Input 
+                              type="password" 
+                              placeholder="Enter your password" 
+                              className="bg-background hover:bg-card/80 focus:bg-card/80 transition-colors"
+                              {...field} 
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -149,27 +161,32 @@ export default function AuthPage() {
 
                     <Button 
                       type="submit" 
-                      className="w-full" 
+                      className="w-full mt-6 shadow-sm hover:shadow-md transition-all" 
                       disabled={auth.loginMutation.isPending}
                     >
-                      {auth.loginMutation.isPending ? "Logging in..." : "Log In"}
+                      {auth.loginMutation.isPending ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Signing In...
+                        </span>
+                      ) : "Sign In"}
                     </Button>
                   </form>
                 </Form>
-                <div className="mt-4 text-center">
-                  <span className="text-sm text-neutral-600">Don't have an account? </span>
+                <div className="mt-6 text-center">
+                  <span className="text-sm text-muted-foreground">Don't have an account? </span>
                   <button 
-                    className="text-sm text-blue-600 hover:underline"
+                    className="text-sm text-primary font-medium hover:underline"
                     onClick={() => setActiveTab("register")}
                   >
-                    Register
+                    Create Account
                   </button>
                 </div>
               </TabsContent>
 
               {/* Register Tab */}
-              <TabsContent value="register">
-                <h2 className="text-xl font-bold text-center mb-6">Create Account</h2>
+              <TabsContent value="register" className="mt-0">
+                <h2 className="text-xl font-bold text-center mb-6">Join County Audit Hub</h2>
                 <Form {...registerForm}>
                   <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">
                     <FormField
@@ -177,9 +194,13 @@ export default function AuthPage() {
                       name="username"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Username</FormLabel>
+                          <FormLabel className="text-foreground/80">Username</FormLabel>
                           <FormControl>
-                            <Input placeholder="Choose a username" {...field} />
+                            <Input 
+                              placeholder="Choose a unique username" 
+                              className="bg-background hover:bg-card/80 focus:bg-card/80 transition-colors"
+                              {...field} 
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -191,9 +212,13 @@ export default function AuthPage() {
                       name="fullName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Full Name</FormLabel>
+                          <FormLabel className="text-foreground/80">Full Name</FormLabel>
                           <FormControl>
-                            <Input placeholder="Enter your full name" {...field} />
+                            <Input 
+                              placeholder="Enter your full name" 
+                              className="bg-background hover:bg-card/80 focus:bg-card/80 transition-colors"
+                              {...field} 
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -205,13 +230,13 @@ export default function AuthPage() {
                       name="role"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Role</FormLabel>
+                          <FormLabel className="text-foreground/80">Role</FormLabel>
                           <Select 
                             defaultValue={field.value} 
                             onValueChange={field.onChange}
                           >
                             <FormControl>
-                              <SelectTrigger>
+                              <SelectTrigger className="bg-background hover:bg-card/80 focus:bg-card/80 transition-colors">
                                 <SelectValue placeholder="Select your role" />
                               </SelectTrigger>
                             </FormControl>
@@ -231,9 +256,14 @@ export default function AuthPage() {
                       name="password"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Password</FormLabel>
+                          <FormLabel className="text-foreground/80">Password</FormLabel>
                           <FormControl>
-                            <Input type="password" placeholder="Create a password" {...field} />
+                            <Input 
+                              type="password" 
+                              placeholder="Create a secure password" 
+                              className="bg-background hover:bg-card/80 focus:bg-card/80 transition-colors"
+                              {...field} 
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -245,9 +275,14 @@ export default function AuthPage() {
                       name="confirmPassword"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Confirm Password</FormLabel>
+                          <FormLabel className="text-foreground/80">Confirm Password</FormLabel>
                           <FormControl>
-                            <Input type="password" placeholder="Confirm your password" {...field} />
+                            <Input 
+                              type="password" 
+                              placeholder="Confirm your password" 
+                              className="bg-background hover:bg-card/80 focus:bg-card/80 transition-colors"
+                              {...field} 
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -256,20 +291,25 @@ export default function AuthPage() {
 
                     <Button 
                       type="submit" 
-                      className="w-full" 
+                      className="w-full mt-6 shadow-sm hover:shadow-md transition-all" 
                       disabled={auth.registerMutation.isPending}
                     >
-                      {auth.registerMutation.isPending ? "Creating Account..." : "Create Account"}
+                      {auth.registerMutation.isPending ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Creating Account...
+                        </span>
+                      ) : "Create Account"}
                     </Button>
                   </form>
                 </Form>
-                <div className="mt-4 text-center">
-                  <span className="text-sm text-neutral-600">Already have an account? </span>
+                <div className="mt-6 text-center">
+                  <span className="text-sm text-muted-foreground">Already have an account? </span>
                   <button 
-                    className="text-sm text-blue-600 hover:underline"
+                    className="text-sm text-primary font-medium hover:underline"
                     onClick={() => setActiveTab("login")}
                   >
-                    Log In
+                    Sign In
                   </button>
                 </div>
               </TabsContent>
@@ -279,43 +319,49 @@ export default function AuthPage() {
       </div>
 
       {/* Right Section (Hero) */}
-      <div className="hidden md:flex md:w-1/2 bg-blue-600 flex-col justify-center items-center p-12 text-white">
-        <div className="max-w-md">
+      <div className="hidden md:flex md:w-1/2 bg-primary flex-col justify-center items-center p-12 text-primary-foreground">
+        <div className="max-w-md glass-panel p-8 rounded-lg">
           <h1 className="text-4xl font-bold mb-6">County Audit Hub</h1>
-          <p className="text-xl mb-8">
-            A powerful web-based auditing module designed for internal use by the county assessor's office.
+          <p className="text-xl mb-8 opacity-90">
+            A comprehensive auditing platform for Min County Assessor's Office
           </p>
           
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="flex items-start">
-              <svg className="h-5 w-5 mr-3 mt-0.5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
-              </svg>
+              <div className="bg-primary-foreground/20 p-2 rounded-lg mr-4">
+                <CheckCircle className="h-6 w-6" />
+              </div>
               <div>
-                <h3 className="font-semibold text-lg">Real-Time Collaboration</h3>
-                <p className="text-blue-100">Work together seamlessly with live updates and instant notifications.</p>
+                <h3 className="font-semibold text-lg">Streamlined Workflows</h3>
+                <p className="opacity-80">Efficient processes with real-time updates and notifications</p>
               </div>
             </div>
             
             <div className="flex items-start">
-              <svg className="h-5 w-5 mr-3 mt-0.5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
-              </svg>
+              <div className="bg-primary-foreground/20 p-2 rounded-lg mr-4">
+                <BarChart3 className="h-6 w-6" />
+              </div>
               <div>
                 <h3 className="font-semibold text-lg">Advanced Analytics</h3>
-                <p className="text-blue-100">Gain insights with comprehensive dashboards and interactive reports.</p>
+                <p className="opacity-80">Comprehensive dashboards and interactive performance reports</p>
               </div>
             </div>
             
             <div className="flex items-start">
-              <svg className="h-5 w-5 mr-3 mt-0.5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
-              </svg>
+              <div className="bg-primary-foreground/20 p-2 rounded-lg mr-4">
+                <Shield className="h-6 w-6" />
+              </div>
               <div>
                 <h3 className="font-semibold text-lg">Secure & Compliant</h3>
-                <p className="text-blue-100">Complete audit trails and role-based access controls for secure operations.</p>
+                <p className="opacity-80">Role-based access control and comprehensive audit trails</p>
               </div>
             </div>
+          </div>
+          
+          <div className="mt-12 pt-6 border-t border-primary-foreground/20">
+            <p className="text-sm opacity-70">
+              An internal application for Min County Assessor's Office in Washington, designed to streamline property assessment auditing processes.
+            </p>
           </div>
         </div>
       </div>
