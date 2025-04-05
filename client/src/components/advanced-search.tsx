@@ -26,6 +26,10 @@ interface AdvancedSearchProps {
 type SearchCriteria = {
   auditNumber?: string;
   propertyId?: string;
+  title?: string;
+  description?: string;
+  address?: string;
+  reason?: string;
   status?: string;
   priority?: string;
   submittedDateStart?: Date;
@@ -153,6 +157,20 @@ export default function AdvancedSearch({ onSearch, onClose }: AdvancedSearchProp
 
       {activeTab === "basic" ? (
         <div className="space-y-4">
+          <div className="relative">
+            <Input
+              id="searchAll"
+              placeholder="Search all fields (fuzzy search for title, description, property ID, address, etc.)"
+              value={criteria.title || ""}
+              onChange={(e) => updateCriteria("title", e.target.value)}
+              className="pl-10"
+            />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-400" />
+            <div className="text-xs text-neutral-500 mt-1">
+              Smart search: System will find matches even with typos or partial terms
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="auditNumber">Audit Number</Label>
@@ -171,6 +189,26 @@ export default function AdvancedSearch({ onSearch, onClose }: AdvancedSearchProp
                 placeholder="Search by property ID"
                 value={criteria.propertyId || ""}
                 onChange={(e) => updateCriteria("propertyId", e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="address">Property Address</Label>
+              <Input
+                id="address"
+                placeholder="Search by property address"
+                value={criteria.address || ""}
+                onChange={(e) => updateCriteria("address", e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="reason">Audit Reason</Label>
+              <Input
+                id="reason"
+                placeholder="Search by audit reason"
+                value={criteria.reason || ""}
+                onChange={(e) => updateCriteria("reason", e.target.value)}
               />
             </div>
 

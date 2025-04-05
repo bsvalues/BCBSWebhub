@@ -759,13 +759,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Advanced search for audits
+  // Advanced search for audits with fuzzy search capabilities
   app.post("/api/audits/search", ensureAuthenticated, async (req, res) => {
     try {
       // Validate the request body with a flexible schema to allow partial criteria
       const searchSchema = z.object({
         auditNumber: z.string().optional(),
         propertyId: z.string().optional(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+        address: z.string().optional(),
+        reason: z.string().optional(),
         status: z.enum(["pending", "in_progress", "approved", "rejected", "needs_info"]).optional(),
         priority: z.enum(["urgent", "high", "normal", "low"]).optional(),
         submittedDateStart: z.string().optional().transform(val => val ? new Date(val) : undefined),
@@ -787,23 +791,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allAudits = await storage.getAudits();
       
       const { 
-        auditNumber, propertyId, status, priority, 
+        auditNumber, propertyId, title, description, address, reason,
+        status, priority, 
         submittedDateStart, submittedDateEnd, 
         dueDateStart, dueDateEnd,
         assignedToId, submittedById,
         assessmentMin, assessmentMax
       } = result.data;
       
+      // Helper function for fuzzy search matching
+      const fuzzyMatch = (text: string, searchTerm: string): boolean => {
+        if (!text || !searchTerm) return false;
+        
+        // Convert both to lowercase for case-insensitive matching
+        const textLower = text.toLowerCase();
+        const searchLower = searchTerm.toLowerCase();
+        
+        // Exact match or includes test first (fastest)
+        if (textLower.includes(searchLower)) return true;
+        
+        // Split search term into words for multi-word matching
+        const searchWords = searchLower.split(/\s+/).filter(word => word.length > 1);
+        
+        // Check if all words appear somewhere in the text (in any order)
+        if (searchWords.length > 1) {
+          return searchWords.every(word => textLower.includes(word));
+        }
+        
+        // For single words, check for partial word matches with tolerance
+        if (searchLower.length > 3) {
+          // For longer search terms, try to match parts (simulate typo tolerance)
+          for (let i = 0; i < searchLower.length - 2; i++) {
+            const fragment = searchLower.substring(i, i + 3);
+            if (textLower.includes(fragment)) return true;
+          }
+        }
+        
+        return false;
+      };
+      
       const filteredAudits = allAudits.filter(audit => {
-        // Check each criterion if provided
-        if (auditNumber && !audit.auditNumber.toLowerCase().includes(auditNumber.toLowerCase())) {
-          return false;
+        // Text-based fuzzy search fields
+        if (auditNumber) {
+          if (!fuzzyMatch(audit.auditNumber, auditNumber)) {
+            return false;
+          }
         }
         
-        if (propertyId && !audit.propertyId.toLowerCase().includes(propertyId.toLowerCase())) {
-          return false;
+        if (propertyId) {
+          if (!fuzzyMatch(audit.propertyId, propertyId)) {
+            return false;
+          }
         }
         
+        if (title) {
+          if (!fuzzyMatch(audit.title, title)) {
+            return false;
+          }
+        }
+        
+        if (description) {
+          if (!fuzzyMatch(audit.description, description)) {
+            return false;
+          }
+        }
+        
+        if (address) {
+          if (!fuzzyMatch(audit.address, address)) {
+            return false;
+          }
+        }
+        
+        if (reason) {
+          if (!fuzzyMatch(audit.reason || "", reason)) {
+            return false;
+          }
+        }
+        
+        // Exact match fields
         if (status && audit.status !== status) {
           return false;
         }
