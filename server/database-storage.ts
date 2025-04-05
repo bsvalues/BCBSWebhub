@@ -168,10 +168,10 @@ export class DatabaseStorage implements IStorage {
     
     console.log("Seeding database with initial data...");
     
-    // Create admin user
+    // Create admin user with a standard bcrypt hash for "admin123"
     const admin = await this.createUser({
       username: "admin",
-      password: "$2b$10$3euPcmQFCiblsZeEu5s7p.9MQKRHZr6V4oQDLcqwtKQjQrX5Xjxu2", // "admin123"
+      password: "$2b$10$rJ8DLkDMWXqpXkTKzYqUGufXfb5RrxA/eMYVZJ/a1SFu.kZaLTz1q", // "admin123"
       fullName: "Administrator",
       role: "admin"
     });
@@ -179,7 +179,7 @@ export class DatabaseStorage implements IStorage {
     // Create auditor user
     const auditor = await this.createUser({
       username: "john.doe",
-      password: "$2b$10$3euPcmQFCiblsZeEu5s7p.9MQKRHZr6V4oQDLcqwtKQjQrX5Xjxu2", // "admin123"
+      password: "$2b$10$rJ8DLkDMWXqpXkTKzYqUGufXfb5RrxA/eMYVZJ/a1SFu.kZaLTz1q", // "admin123"
       fullName: "John Doe",
       role: "auditor"
     });
