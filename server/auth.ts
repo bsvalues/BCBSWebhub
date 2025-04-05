@@ -60,8 +60,8 @@ export function setupAuth(app: Express) {
 
   const sessionSettings: session.SessionOptions = {
     secret: SESSION_SECRET,
-    resave: true, // Forces the session to be saved back to the store
-    saveUninitialized: true, // Forces a session that is "uninitialized" to be saved to the store
+    resave: false, // Don't save session if unmodified
+    saveUninitialized: false, // Don't create session until something stored
     rolling: true, // Reset cookie expiration on each request
     store: storage.sessionStore,
     name: 'county_audit_sid', // Custom name to avoid conflicts
@@ -129,13 +129,13 @@ export function setupAuth(app: Express) {
 
   app.post("/api/login", (req, res, next) => {
     console.log("Login attempt for user:", req.body.username);
-    console.log("Current session ID:", req.sessionID);
     
     // Make sure we have valid parameters
     if (!req.body.username || !req.body.password) {
       return res.status(400).json({ error: "Username and password are required" });
     }
     
+    // Use basic passport authenticate with simpler approach
     passport.authenticate("local", (err: any, user: Express.User | false, info: any) => {
       if (err) {
         console.error("Login authentication error:", err);
@@ -147,60 +147,19 @@ export function setupAuth(app: Express) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
       
-      console.log("Authentication successful for user:", user.username);
-      
-      // Regenerate the session to prevent session fixation attacks
-      req.session.regenerate((err) => {
-        if (err) {
-          console.error("Error regenerating session:", err);
-          return next(err);
+      // Log the user in (simple approach)
+      req.login(user, (loginErr) => {
+        if (loginErr) {
+          console.error("Error in req.login():", loginErr);
+          return next(loginErr);
         }
         
-        // Log the user in and save their data to the session
-        req.login(user, (err) => {
-          if (err) {
-            console.error("Error in req.login():", err);
-            return next(err);
-          }
-          
-          console.log("User logged in:", user.username);
-          console.log("New session ID:", req.sessionID);
-          
-          // Set a session flag to make sure we know it's authenticated
-          req.session.authenticated = true;
-          req.session.userInfo = {
-            id: user.id,
-            username: user.username,
-            role: user.role
-          };
-          
-          // Force a session save to ensure it's properly stored before returning
-          req.session.save((err) => {
-            if (err) {
-              console.error("Error saving session:", err);
-              return next(err);
-            }
-            
-            // Add helpful headers for debugging
-            res.header('X-Auth-Status', 'Authenticated');
-            res.header('X-Session-ID', req.sessionID);
-            
-            // Remove password from the response
-            const { password, ...userWithoutPassword } = user;
-            
-            // Log the session data for debugging
-            console.log("Session data after login:", {
-              id: req.sessionID,
-              authenticated: req.session.authenticated,
-              user: req.user ? req.user.username : 'none'
-            });
-            
-            // Delay the response slightly to ensure cookie is set
-            setTimeout(() => {
-              res.status(200).json(userWithoutPassword);
-            }, 100);
-          });
-        });
+        console.log("User logged in successfully:", user.username);
+        
+        // Remove password from the response
+        const { password, ...userWithoutPassword } = user;
+        
+        res.status(200).json(userWithoutPassword);
       });
     })(req, res, next);
   });
@@ -240,7 +199,6 @@ export function setupAuth(app: Express) {
     console.log("Session cookie:", req.headers.cookie);
     console.log("Session data:", JSON.stringify(req.session));
     console.log("Is authenticated:", req.isAuthenticated());
-    console.log("Passport session:", req.session.passport);
     
     // Add debug headers
     res.header('X-Session-ID', req.sessionID);

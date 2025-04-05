@@ -47,14 +47,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
       console.log("Login attempt:", credentials.username);
-      const res = await apiRequest("POST", "/api/login", credentials);
-      
-      // Wait for the session to be fully established before continuing
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const userData = await res.json();
-      console.log("Login response:", userData);
-      return userData;
+      try {
+        // Make the login request
+        const res = await fetch("/api/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache"
+          },
+          body: JSON.stringify(credentials),
+          credentials: "include"
+        });
+        
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(errorText || "Login failed");
+        }
+        
+        // Wait for the session to be fully established before continuing
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const userData = await res.json();
+        console.log("Login response:", userData);
+        return userData;
+      } catch (error) {
+        console.error("Login error:", error);
+        throw new Error(error instanceof Error ? error.message : "Login failed");
+      }
     },
     onSuccess: (user: SelectUser) => {
       console.log("Login successful:", user.username);
@@ -88,10 +107,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const registerMutation = useMutation({
     mutationFn: async (credentials: InsertUser) => {
       console.log("Registration attempt:", credentials.username);
-      const res = await apiRequest("POST", "/api/register", credentials);
-      const userData = await res.json();
-      console.log("Registration response:", userData);
-      return userData;
+      try {
+        // Make the registration request
+        const res = await fetch("/api/register", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache"
+          },
+          body: JSON.stringify(credentials),
+          credentials: "include"
+        });
+        
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(errorText || "Registration failed");
+        }
+        
+        const userData = await res.json();
+        console.log("Registration response:", userData);
+        return userData;
+      } catch (error) {
+        console.error("Registration error:", error);
+        throw new Error(error instanceof Error ? error.message : "Registration failed");
+      }
     },
     onSuccess: (user: SelectUser) => {
       console.log("Registration successful:", user.username);
@@ -121,7 +160,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logoutMutation = useMutation({
     mutationFn: async () => {
       console.log("Logout attempt");
-      await apiRequest("POST", "/api/logout");
+      try {
+        // Make the logout request
+        const res = await fetch("/api/logout", {
+          method: "POST",
+          headers: {
+            "Cache-Control": "no-cache"
+          },
+          credentials: "include"
+        });
+        
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(errorText || "Logout failed");
+        }
+        
+        return;
+      } catch (error) {
+        console.error("Logout error:", error);
+        throw new Error(error instanceof Error ? error.message : "Logout failed");
+      }
     },
     onSuccess: () => {
       console.log("Logout successful");
