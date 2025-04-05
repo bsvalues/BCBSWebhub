@@ -45,12 +45,17 @@ async function comparePasswords(supplied: string, stored: string) {
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || "county-audit-hub-secret",
-    resave: false,
-    saveUninitialized: false,
+    resave: true,
+    saveUninitialized: false, // Only save sessions that are modified
+    rolling: true, // Reset cookie expiration on each request
     store: storage.sessionStore,
+    name: 'county_audit_sid', // Custom name to avoid conflicts
     cookie: {
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      secure: process.env.NODE_ENV === "production",
+      secure: false, // Set to true in production with https
+      sameSite: 'lax',
+      httpOnly: true,
+      path: '/'
     }
   };
 
@@ -108,28 +113,98 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/login", (req, res, next) => {
+    console.log("Login attempt for user:", req.body.username);
+    console.log("Current session ID:", req.sessionID);
+    
+    // Make sure we have valid parameters
+    if (!req.body.username || !req.body.password) {
+      return res.status(400).json({ error: "Username and password are required" });
+    }
+    
     passport.authenticate("local", (err: any, user: Express.User | false, info: any) => {
-      if (err) return next(err);
-      if (!user) return res.status(401).json({ error: "Invalid credentials" });
+      if (err) {
+        console.error("Login authentication error:", err);
+        return next(err);
+      }
+      
+      if (!user) {
+        console.log("Invalid credentials for user:", req.body.username);
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+      
+      console.log("Authentication successful for user:", user.username);
       
       req.login(user, (err) => {
-        if (err) return next(err);
-        // Remove password from the response
-        const { password, ...userWithoutPassword } = user;
-        res.status(200).json(userWithoutPassword);
+        if (err) {
+          console.error("Error in req.login():", err);
+          return next(err);
+        }
+        
+        console.log("Session saved, user logged in:", user.username);
+        console.log("New session ID:", req.sessionID);
+        
+        // Force session save before returning
+        req.session.save(err => {
+          if (err) {
+            console.error("Error saving session:", err);
+            return next(err);
+          }
+          
+          // Remove password from the response
+          const { password, ...userWithoutPassword } = user;
+          res.status(200).json(userWithoutPassword);
+        });
       });
     })(req, res, next);
   });
 
   app.post("/api/logout", (req, res, next) => {
+    console.log("Logout request for user:", req.user?.username);
+    console.log("Session ID for logout:", req.sessionID);
+    
+    if (!req.isAuthenticated()) {
+      console.log("Not authenticated, nothing to log out");
+      return res.sendStatus(200);
+    }
+    
     req.logout((err) => {
-      if (err) return next(err);
-      res.sendStatus(200);
+      if (err) {
+        console.error("Logout error:", err);
+        return next(err);
+      }
+      
+      // Also destroy the session
+      req.session.destroy((err) => {
+        if (err) {
+          console.error("Error destroying session:", err);
+          return next(err);
+        }
+        
+        console.log("User logged out successfully and session destroyed");
+        res.clearCookie('county_audit_sid');
+        res.sendStatus(200);
+      });
     });
   });
 
   app.get("/api/user", (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ error: "Not authenticated" });
+    console.log("GET /api/user - Session ID:", req.sessionID);
+    console.log("Session data:", req.session);
+    console.log("Is authenticated:", req.isAuthenticated());
+    
+    if (!req.isAuthenticated()) {
+      console.log("User not authenticated");
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    
+    console.log("User authenticated:", req.user?.username);
+    
+    // Ensure we have a valid user object
+    if (!req.user) {
+      console.error("User authenticated but req.user is undefined");
+      return res.status(500).json({ error: "User session is invalid" });
+    }
+    
     // Remove password from the response
     const { password, ...userWithoutPassword } = req.user!;
     res.json(userWithoutPassword);

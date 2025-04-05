@@ -39,27 +39,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
     retry: false,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true, // Enable refetch on window focus to detect changes in auth state
+    staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
   // Login mutation
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
+      console.log("Login attempt:", credentials.username);
       const res = await apiRequest("POST", "/api/login", credentials);
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Login failed");
-      }
-      return await res.json();
+      const userData = await res.json();
+      console.log("Login response:", userData);
+      return userData;
     },
     onSuccess: (user: SelectUser) => {
+      console.log("Login successful:", user.username);
       queryClient.setQueryData(["/api/user"], user);
       toast({
         title: "Login successful",
         description: `Welcome back, ${user.fullName}!`,
       });
+      
+      // Force immediate refetch of user data to ensure session is established
+      setTimeout(() => {
+        console.log("Refetching user data after login");
+        refetch();
+      }, 100);
     },
     onError: (error: Error) => {
+      console.error("Login error:", error.message);
       toast({
         title: "Login failed",
         description: error.message || "Invalid username or password",
@@ -71,21 +79,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Registration mutation
   const registerMutation = useMutation({
     mutationFn: async (credentials: InsertUser) => {
+      console.log("Registration attempt:", credentials.username);
       const res = await apiRequest("POST", "/api/register", credentials);
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Registration failed");
-      }
-      return await res.json();
+      const userData = await res.json();
+      console.log("Registration response:", userData);
+      return userData;
     },
     onSuccess: (user: SelectUser) => {
+      console.log("Registration successful:", user.username);
       queryClient.setQueryData(["/api/user"], user);
       toast({
         title: "Registration successful",
         description: `Welcome, ${user.fullName}!`,
       });
+      
+      // Force immediate refetch of user data to ensure session is established
+      setTimeout(() => {
+        console.log("Refetching user data after registration");
+        refetch();
+      }, 100);
     },
     onError: (error: Error) => {
+      console.error("Registration error:", error.message);
       toast({
         title: "Registration failed",
         description: error.message || "Could not create your account",
@@ -97,19 +112,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Logout mutation
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/logout");
-      if (!res.ok) {
-        throw new Error("Logout failed");
-      }
+      console.log("Logout attempt");
+      await apiRequest("POST", "/api/logout");
     },
     onSuccess: () => {
+      console.log("Logout successful");
       queryClient.setQueryData(["/api/user"], null);
       toast({
         title: "Logged out",
         description: "You have been successfully logged out.",
       });
+      
+      // Force immediate refetch of user data to confirm logout
+      setTimeout(() => {
+        console.log("Refetching user data after logout");
+        refetch();
+      }, 100);
     },
     onError: (error: Error) => {
+      console.error("Logout error:", error.message);
       toast({
         title: "Logout failed",
         description: error.message || "Could not log you out",
@@ -117,6 +138,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     },
   });
+
+  // Log the user status on state changes for debugging
+  useEffect(() => {
+    if (initialized) {
+      console.log("Auth state:", { 
+        user: user ? `${user.username} (${user.role})` : "not logged in",
+        isLoading, 
+        hasError: !!error
+      });
+    }
+  }, [user, isLoading, error, initialized]);
 
   // Set initialized after first render
   useEffect(() => {
