@@ -8,6 +8,18 @@ import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
 import * as bcrypt from "bcrypt";
 
+// Extend SessionData interface to include our custom properties
+declare module 'express-session' {
+  interface SessionData {
+    authenticated?: boolean;
+    userInfo?: {
+      id: number;
+      username: string;
+      role: string;
+    };
+  }
+}
+
 declare global {
   namespace Express {
     interface User extends SelectUser {}
@@ -137,25 +149,57 @@ export function setupAuth(app: Express) {
       
       console.log("Authentication successful for user:", user.username);
       
-      req.login(user, (err) => {
+      // Regenerate the session to prevent session fixation attacks
+      req.session.regenerate((err) => {
         if (err) {
-          console.error("Error in req.login():", err);
+          console.error("Error regenerating session:", err);
           return next(err);
         }
         
-        console.log("Session saved, user logged in:", user.username);
-        console.log("New session ID:", req.sessionID);
-        
-        // Force session save before returning
-        req.session.save(err => {
+        // Log the user in and save their data to the session
+        req.login(user, (err) => {
           if (err) {
-            console.error("Error saving session:", err);
+            console.error("Error in req.login():", err);
             return next(err);
           }
           
-          // Remove password from the response
-          const { password, ...userWithoutPassword } = user;
-          res.status(200).json(userWithoutPassword);
+          console.log("User logged in:", user.username);
+          console.log("New session ID:", req.sessionID);
+          
+          // Set a session flag to make sure we know it's authenticated
+          req.session.authenticated = true;
+          req.session.userInfo = {
+            id: user.id,
+            username: user.username,
+            role: user.role
+          };
+          
+          // Force a session save to ensure it's properly stored before returning
+          req.session.save((err) => {
+            if (err) {
+              console.error("Error saving session:", err);
+              return next(err);
+            }
+            
+            // Add helpful headers for debugging
+            res.header('X-Auth-Status', 'Authenticated');
+            res.header('X-Session-ID', req.sessionID);
+            
+            // Remove password from the response
+            const { password, ...userWithoutPassword } = user;
+            
+            // Log the session data for debugging
+            console.log("Session data after login:", {
+              id: req.sessionID,
+              authenticated: req.session.authenticated,
+              user: req.user ? req.user.username : 'none'
+            });
+            
+            // Delay the response slightly to ensure cookie is set
+            setTimeout(() => {
+              res.status(200).json(userWithoutPassword);
+            }, 100);
+          });
         });
       });
     })(req, res, next);
@@ -191,25 +235,53 @@ export function setupAuth(app: Express) {
   });
 
   app.get("/api/user", (req, res) => {
+    // Detailed logging for debugging session issues
     console.log("GET /api/user - Session ID:", req.sessionID);
-    console.log("Session data:", req.session);
+    console.log("Session cookie:", req.headers.cookie);
+    console.log("Session data:", JSON.stringify(req.session));
     console.log("Is authenticated:", req.isAuthenticated());
+    console.log("Passport session:", req.session.passport);
     
+    // Add debug headers
+    res.header('X-Session-ID', req.sessionID);
+    res.header('X-Auth-Status', req.isAuthenticated() ? 'Authenticated' : 'Not-Authenticated');
+    
+    // Check if we have session and user
+    if (!req.session) {
+      console.error("No session found");
+      return res.status(401).json({ error: "No session found" });
+    }
+    
+    // Check if user is authenticated
     if (!req.isAuthenticated()) {
       console.log("User not authenticated");
       return res.status(401).json({ error: "Not authenticated" });
     }
     
+    // Log authenticated user
     console.log("User authenticated:", req.user?.username);
     
-    // Ensure we have a valid user object
+    // Check for valid user object in the request
     if (!req.user) {
       console.error("User authenticated but req.user is undefined");
+      
+      // Try to recover if we have the user info in the session
+      if (req.session.userInfo) {
+        console.log("Attempting to recover from session userInfo");
+        // You would implement proper recovery here, but for now just return the error
+      }
+      
       return res.status(500).json({ error: "User session is invalid" });
     }
     
-    // Remove password from the response
-    const { password, ...userWithoutPassword } = req.user!;
-    res.json(userWithoutPassword);
+    // All checks passed, return user data
+    try {
+      // Remove password from the response
+      const { password, ...userWithoutPassword } = req.user;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      console.error("Error preparing user response:", error);
+      res.status(500).json({ error: "Could not process user data" });
+    }
   });
 }
