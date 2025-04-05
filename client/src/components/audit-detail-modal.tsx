@@ -97,6 +97,15 @@ export default function AuditDetailModal({ audit, isOpen, onClose }: AuditDetail
     }
   };
 
+  // Add function to restart an audit (changing status back to in_progress)
+  const handleRestartAudit = () => {
+    decisionMutation.mutate({
+      id: audit.id,
+      status: "in_progress",
+      comment: "Audit restarted"
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black bg-opacity-50" onClick={onClose}></div>
@@ -125,6 +134,18 @@ export default function AuditDetailModal({ audit, isOpen, onClose }: AuditDetail
                   )}
                 </div>
                 <p className="mt-1 text-neutral-600">{audit.description}</p>
+                
+                {/* Add restart button for rejected or needs_info audits */}
+                {(audit.status === "rejected" || audit.status === "needs_info") && (
+                  <button 
+                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md flex items-center hover:bg-blue-700 disabled:opacity-50"
+                    onClick={handleRestartAudit}
+                    disabled={decisionMutation.isPending}
+                  >
+                    <span className="material-icons text-sm mr-1">refresh</span>
+                    {audit.status === "rejected" ? "Restart Audit" : "Process Requested Info"}
+                  </button>
+                )}
               </div>
               <div className="mt-4 md:mt-0 flex flex-col items-start md:items-end">
                 {getStatusBadge(audit.status)}
@@ -229,8 +250,8 @@ export default function AuditDetailModal({ audit, isOpen, onClose }: AuditDetail
                   </div>
                 </div>
                 
-                {/* Decision section - only show if pending or in_progress */}
-                {(audit.status === "pending" || audit.status === "in_progress") && (
+                {/* Decision section - show based on status */}
+                {(audit.status === "pending" || audit.status === "in_progress" || audit.status === "needs_info") && (
                   <div className="mt-8 border-t border-neutral-200 pt-6">
                     <h5 className="font-medium mb-4">Audit Decision</h5>
                     <div className="flex flex-col space-y-4">
