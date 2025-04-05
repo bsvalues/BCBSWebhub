@@ -32,7 +32,10 @@ export default function LiveAuditLog({ className = "" }: LiveAuditLogProps) {
   useEffect(() => {
     // Create WebSocket connection
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    // Make sure we're using the correct port and path
+    const host = window.location.host;
+    const wsUrl = `${protocol}//${host}/ws`;
+    console.log("Connecting to WebSocket at:", wsUrl);
     const ws = new WebSocket(wsUrl);
     
     ws.onopen = () => {

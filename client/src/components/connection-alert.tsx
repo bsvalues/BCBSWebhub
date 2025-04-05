@@ -7,7 +7,9 @@ export default function ConnectionAlert() {
   useEffect(() => {
     // Set up WebSocket connection monitoring
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    // Make sure we're using the correct port and path
+    const host = window.location.host;
+    const wsUrl = `${protocol}//${host}/ws`;
     
     let ws: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;

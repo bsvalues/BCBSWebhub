@@ -23,6 +23,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
 // Audit status enum
 export const auditStatusEnum = pgEnum("audit_status", [
   "pending", 
+  "in_progress",
   "approved", 
   "rejected", 
   "needs_info"

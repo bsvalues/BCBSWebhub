@@ -4,6 +4,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Audit } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
+import { Loader2 } from "lucide-react";
+import UserAssignment from "./user-assignment";
+import CommentForm from "./comment-form";
+import AuditEventsList from "./audit-events-list";
 
 interface AuditDetailModalProps {
   audit: Audit | null;
@@ -29,6 +33,7 @@ export default function AuditDetailModal({ audit, isOpen, onClose }: AuditDetail
         description: "The audit has been updated successfully."
       });
       queryClient.invalidateQueries({ queryKey: ["/api/audits/pending"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/audits/assigned"] });
       queryClient.invalidateQueries({ queryKey: ["/api/events/recent"] });
       onClose();
     },
@@ -43,7 +48,7 @@ export default function AuditDetailModal({ audit, isOpen, onClose }: AuditDetail
 
   if (!isOpen || !audit) return null;
 
-  const handleDecision = (status: "approved" | "rejected" | "needs_info") => {
+  const handleDecision = (status: "approved" | "rejected" | "needs_info" | "in_progress") => {
     decisionMutation.mutate({
       id: audit.id,
       status,
@@ -75,6 +80,23 @@ export default function AuditDetailModal({ audit, isOpen, onClose }: AuditDetail
 
   const difference = calculateDifference();
 
+  const getStatusBadge = (status: string) => {
+    switch(status) {
+      case "pending":
+        return <span className="text-sm bg-blue-50 text-blue-600 px-2 py-1 rounded">Pending Review</span>;
+      case "in_progress":
+        return <span className="text-sm bg-indigo-50 text-indigo-600 px-2 py-1 rounded">In Progress</span>;
+      case "approved":
+        return <span className="text-sm bg-green-50 text-green-600 px-2 py-1 rounded">Approved</span>;
+      case "rejected":
+        return <span className="text-sm bg-red-50 text-red-600 px-2 py-1 rounded">Rejected</span>;
+      case "needs_info":
+        return <span className="text-sm bg-yellow-50 text-yellow-600 px-2 py-1 rounded">Documentation Needed</span>;
+      default:
+        return <span className="text-sm bg-neutral-50 text-neutral-600 px-2 py-1 rounded">{status}</span>;
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black bg-opacity-50" onClick={onClose}></div>
@@ -105,25 +127,17 @@ export default function AuditDetailModal({ audit, isOpen, onClose }: AuditDetail
                 <p className="mt-1 text-neutral-600">{audit.description}</p>
               </div>
               <div className="mt-4 md:mt-0 flex flex-col items-start md:items-end">
-                {audit.status === "pending" && (
-                  <span className="text-sm bg-blue-50 text-blue-600 px-2 py-1 rounded">Pending Review</span>
-                )}
-                {audit.status === "approved" && (
-                  <span className="text-sm bg-green-50 text-green-600 px-2 py-1 rounded">Approved</span>
-                )}
-                {audit.status === "rejected" && (
-                  <span className="text-sm bg-red-50 text-red-600 px-2 py-1 rounded">Rejected</span>
-                )}
-                {audit.status === "needs_info" && (
-                  <span className="text-sm bg-yellow-50 text-yellow-600 px-2 py-1 rounded">Documentation Needed</span>
-                )}
+                {getStatusBadge(audit.status)}
                 <span className="mt-2 text-sm text-neutral-500">Due: {formatDate(audit.dueDate)}</span>
+                {audit.assignedToId && (
+                  <span className="mt-2 text-sm text-neutral-500">Assigned to: ID {audit.assignedToId}</span>
+                )}
               </div>
             </div>
             
             {/* Tabs */}
             <div className="border-b border-neutral-200">
-              <div className="flex space-x-8">
+              <div className="flex flex-wrap space-x-4 md:space-x-8">
                 <button 
                   className={`px-1 py-2 border-b-2 ${activeTab === "overview" ? "border-blue-600 text-blue-600" : "border-transparent text-neutral-600 hover:text-neutral-900"} font-medium`}
                   onClick={() => setActiveTab("overview")}
@@ -131,10 +145,10 @@ export default function AuditDetailModal({ audit, isOpen, onClose }: AuditDetail
                   Overview
                 </button>
                 <button 
-                  className={`px-1 py-2 border-b-2 ${activeTab === "documents" ? "border-blue-600 text-blue-600" : "border-transparent text-neutral-600 hover:text-neutral-900"} font-medium`}
-                  onClick={() => setActiveTab("documents")}
+                  className={`px-1 py-2 border-b-2 ${activeTab === "assignment" ? "border-blue-600 text-blue-600" : "border-transparent text-neutral-600 hover:text-neutral-900"} font-medium`}
+                  onClick={() => setActiveTab("assignment")}
                 >
-                  Documents
+                  Assignment
                 </button>
                 <button 
                   className={`px-1 py-2 border-b-2 ${activeTab === "history" ? "border-blue-600 text-blue-600" : "border-transparent text-neutral-600 hover:text-neutral-900"} font-medium`}
@@ -147,6 +161,12 @@ export default function AuditDetailModal({ audit, isOpen, onClose }: AuditDetail
                   onClick={() => setActiveTab("comments")}
                 >
                   Comments
+                </button>
+                <button 
+                  className={`px-1 py-2 border-b-2 ${activeTab === "documents" ? "border-blue-600 text-blue-600" : "border-transparent text-neutral-600 hover:text-neutral-900"} font-medium`}
+                  onClick={() => setActiveTab("documents")}
+                >
+                  Documents
                 </button>
               </div>
             </div>
@@ -209,8 +229,8 @@ export default function AuditDetailModal({ audit, isOpen, onClose }: AuditDetail
                   </div>
                 </div>
                 
-                {/* Decision section - only show if pending */}
-                {audit.status === "pending" && (
+                {/* Decision section - only show if pending or in_progress */}
+                {(audit.status === "pending" || audit.status === "in_progress") && (
                   <div className="mt-8 border-t border-neutral-200 pt-6">
                     <h5 className="font-medium mb-4">Audit Decision</h5>
                     <div className="flex flex-col space-y-4">
@@ -266,7 +286,10 @@ export default function AuditDetailModal({ audit, isOpen, onClose }: AuditDetail
                           Cancel
                         </button>
                         {decisionMutation.isPending && (
-                          <div className="text-sm text-neutral-500">Processing...</div>
+                          <div className="flex items-center">
+                            <Loader2 className="h-4 w-4 animate-spin mr-2 text-blue-600" />
+                            <span className="text-sm text-neutral-500">Processing...</span>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -275,21 +298,41 @@ export default function AuditDetailModal({ audit, isOpen, onClose }: AuditDetail
               </div>
             )}
             
-            {activeTab === "documents" && (
-              <div className="mt-6 text-center text-neutral-500">
-                <p>No documents available for this audit.</p>
+            {activeTab === "assignment" && (
+              <div className="mt-6">
+                <UserAssignment audit={audit} />
               </div>
             )}
             
             {activeTab === "history" && (
-              <div className="mt-6 text-center text-neutral-500">
-                <p>No history available for this audit.</p>
+              <div className="mt-6">
+                <AuditEventsList auditId={audit.id} />
               </div>
             )}
             
             {activeTab === "comments" && (
-              <div className="mt-6 text-center text-neutral-500">
-                <p>No comments available for this audit.</p>
+              <div className="mt-6">
+                <div className="mb-6">
+                  <CommentForm auditId={audit.id} />
+                </div>
+                <div className="border-t border-neutral-200 pt-4">
+                  <h5 className="font-medium mb-4">Comments History</h5>
+                  <AuditEventsList auditId={audit.id} />
+                </div>
+              </div>
+            )}
+            
+            {activeTab === "documents" && (
+              <div className="mt-6 p-8 text-center bg-neutral-50 rounded-lg border border-dashed border-neutral-300">
+                <span className="material-icons text-4xl text-neutral-400 mb-2">description</span>
+                <h5 className="font-medium text-neutral-800 mb-2">No Documents Attached</h5>
+                <p className="text-sm text-neutral-500 mb-4">
+                  There are no documents attached to this audit yet.
+                </p>
+                <button className="px-4 py-2 bg-blue-600 text-white rounded-md flex items-center hover:bg-blue-700 mx-auto">
+                  <span className="material-icons text-sm mr-1">upload_file</span>
+                  Upload Document
+                </button>
               </div>
             )}
           </div>

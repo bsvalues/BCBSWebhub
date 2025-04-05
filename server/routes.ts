@@ -5,7 +5,8 @@ import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { setupWebSocketServer } from "./socket";
 import { z } from "zod";
-import { insertAuditSchema, insertAuditEventSchema } from "@shared/schema";
+import { insertAuditSchema, insertAuditEventSchema, users as usersTable } from "@shared/schema";
+import { db } from "./db";
 
 // Define a common error handler for API routes
 const handleApiError = (res: Response, error: any) => {
@@ -39,6 +40,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const pendingAudits = await storage.getPendingAudits();
       res.json(pendingAudits);
+    } catch (error) {
+      handleApiError(res, error);
+    }
+  });
+  
+  // Get audits assigned to the current user
+  app.get("/api/audits/assigned", ensureAuthenticated, async (req, res) => {
+    try {
+      const assignedAudits = await storage.getAssignedAudits(req.user!.id);
+      res.json(assignedAudits);
+    } catch (error) {
+      handleApiError(res, error);
+    }
+  });
+  
+  // Get audits created by the current user
+  app.get("/api/audits/created", ensureAuthenticated, async (req, res) => {
+    try {
+      const createdAudits = await storage.getAuditsCreatedByUser(req.user!.id);
+      res.json(createdAudits);
+    } catch (error) {
+      handleApiError(res, error);
+    }
+  });
+  
+  // Get all users (for assignment)
+  app.get("/api/users", ensureAuthenticated, async (req, res) => {
+    try {
+      const usersList = await db.select({
+        id: usersTable.id,
+        username: usersTable.username,
+        fullName: usersTable.fullName,
+        role: usersTable.role
+      }).from(usersTable);
+      
+      res.json(usersList);
     } catch (error) {
       handleApiError(res, error);
     }
@@ -93,7 +130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Validate the request body
       const decisionSchema = z.object({
-        status: z.enum(["approved", "rejected", "needs_info"]),
+        status: z.enum(["approved", "rejected", "needs_info", "in_progress", "pending"]),
         comment: z.string().optional(),
       });
       
@@ -112,7 +149,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Create an audit event for this decision
       const eventType = status === "approved" ? "approved" : 
-                        status === "rejected" ? "rejected" : "requested_info";
+                        status === "rejected" ? "rejected" : 
+                        status === "needs_info" ? "requested_info" : 
+                        status === "in_progress" ? "in_progress" : "status_change";
       
       const auditEvent = await storage.createAuditEvent({
         auditId: id,
@@ -140,6 +179,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Assign an audit to a user
+  app.post("/api/audits/:id/assign", ensureAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid audit ID" });
+      }
+      
+      const audit = await storage.getAuditById(id);
+      if (!audit) {
+        return res.status(404).json({ error: "Audit not found" });
+      }
+      
+      // Validate the request body
+      const assignmentSchema = z.object({
+        assignedToId: z.number(),
+        comment: z.string().optional(),
+      });
+      
+      const result = assignmentSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: "Invalid request body", details: result.error });
+      }
+      
+      const { assignedToId, comment } = result.data;
+      
+      // Check if the assigned user exists
+      const assignedUser = await storage.getUser(assignedToId);
+      if (!assignedUser) {
+        return res.status(400).json({ error: "Assigned user not found" });
+      }
+      
+      // Update the audit assignment
+      const updatedAudit = await storage.updateAudit(id, { 
+        assignedToId,
+        // If the audit was previously unassigned and is now being assigned,
+        // change its status to "in_progress" if it was pending
+        ...(audit.status === "pending" && !audit.assignedToId ? { status: "in_progress" } : {})
+      });
+      
+      if (!updatedAudit) {
+        return res.status(500).json({ error: "Failed to update audit assignment" });
+      }
+      
+      // Create an audit event for this assignment
+      const auditEvent = await storage.createAuditEvent({
+        auditId: id,
+        userId: req.user!.id,
+        eventType: "assigned",
+        comment,
+        changes: {
+          before: { assignedToId: audit.assignedToId },
+          after: { assignedToId }
+        },
+        timestamp: new Date(),
+      });
+      
+      // Broadcast the update to all connected clients
+      const socketPayload = {
+        type: "AUDIT_ASSIGNED",
+        audit: updatedAudit,
+        event: auditEvent,
+      };
+      global.io?.customEmit("audit-update", socketPayload);
+      
+      res.json({ audit: updatedAudit, event: auditEvent });
+    } catch (error) {
+      handleApiError(res, error);
+    }
+  });
+  
+  // Add a comment to an audit
+  app.post("/api/audits/:id/comments", ensureAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid audit ID" });
+      }
+      
+      const audit = await storage.getAuditById(id);
+      if (!audit) {
+        return res.status(404).json({ error: "Audit not found" });
+      }
+      
+      // Validate the request body
+      const commentSchema = z.object({
+        comment: z.string().min(1, "Comment cannot be empty"),
+      });
+      
+      const result = commentSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: "Invalid comment", details: result.error });
+      }
+      
+      const { comment } = result.data;
+      
+      // Create an audit event for this comment
+      const auditEvent = await storage.createAuditEvent({
+        auditId: id,
+        userId: req.user!.id,
+        eventType: "comment",
+        comment,
+        timestamp: new Date(),
+      });
+      
+      // Broadcast the comment to all connected clients
+      const socketPayload = {
+        type: "AUDIT_COMMENT",
+        audit,
+        event: auditEvent,
+      };
+      global.io?.customEmit("audit-update", socketPayload);
+      
+      res.json({ success: true, event: auditEvent });
+    } catch (error) {
+      handleApiError(res, error);
+    }
+  });
+  
   // Get recent audit events for the live audit log
   app.get("/api/events/recent", ensureAuthenticated, async (req, res) => {
     try {
@@ -159,6 +317,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate basic analytics
       const analytics = {
         pendingCount: allAudits.filter(a => a.status === "pending").length,
+        inProgressCount: allAudits.filter(a => a.status === "in_progress").length,
         approvedCount: allAudits.filter(a => a.status === "approved").length,
         rejectedCount: allAudits.filter(a => a.status === "rejected").length,
         needsInfoCount: allAudits.filter(a => a.status === "needs_info").length,
@@ -166,9 +325,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Performance metrics
         completionRate: allAudits.length > 0 ? 
-          ((allAudits.filter(a => a.status !== "pending").length / allAudits.length) * 100).toFixed(1) : "0",
-        approvalRate: allAudits.filter(a => a.status !== "pending").length > 0 ?
-          ((allAudits.filter(a => a.status === "approved").length / allAudits.filter(a => a.status !== "pending").length) * 100).toFixed(1) : "0",
+          ((allAudits.filter(a => a.status !== "pending" && a.status !== "in_progress").length / allAudits.length) * 100).toFixed(1) : "0",
+        approvalRate: allAudits.filter(a => a.status !== "pending" && a.status !== "in_progress").length > 0 ?
+          ((allAudits.filter(a => a.status === "approved").length / allAudits.filter(a => a.status !== "pending" && a.status !== "in_progress").length) * 100).toFixed(1) : "0",
         
         // Other sample analytics
         priorityBreakdown: {

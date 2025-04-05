@@ -83,6 +83,14 @@ export class DatabaseStorage implements IStorage {
   async getPendingAudits(): Promise<Audit[]> {
     return this.getAudits({ status: "pending" });
   }
+  
+  async getAssignedAudits(userId: number): Promise<Audit[]> {
+    return this.getAudits({ assignedToId: userId });
+  }
+  
+  async getAuditsCreatedByUser(userId: number): Promise<Audit[]> {
+    return this.getAudits({ submittedById: userId });
+  }
 
   async getAuditById(id: number): Promise<Audit | undefined> {
     const results = await db.select().from(audits).where(eq(audits.id, id));
