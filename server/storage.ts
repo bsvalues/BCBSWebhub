@@ -212,9 +212,13 @@ export class MemStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentUserId++;
     const now = new Date();
+    // Ensure role is set with a default if not provided
+    const role = insertUser.role || "auditor";
+    
     const user: User = { 
       ...insertUser, 
       id,
+      role,
       createdAt: now
     };
     this.users.set(id, user);
@@ -271,10 +275,21 @@ export class MemStorage implements IStorage {
     // Generate an audit number if not provided
     const auditNumber = insertAudit.auditNumber || `A-${100000 + id}`;
     
+    // Ensure required fields are set with defaults if missing
+    const status = insertAudit.status || "pending";
+    // Handle optional fields with proper null values
+    const taxImpact = insertAudit.taxImpact ?? null;
+    const reason = insertAudit.reason ?? null;
+    const assignedToId = insertAudit.assignedToId ?? null;
+    
     const audit: Audit = {
       ...insertAudit,
       id,
       auditNumber,
+      status,
+      taxImpact,
+      reason,
+      assignedToId,
       submittedAt: now,
       updatedAt: now,
     };
@@ -315,9 +330,16 @@ export class MemStorage implements IStorage {
     const id = this.currentEventId++;
     const now = new Date();
     
+    // Ensure comment is at least null if not provided
+    const comment = insertEvent.comment ?? null;
+    // Ensure changes is an empty object if not provided
+    const changes = insertEvent.changes ?? {};
+    
     const event: AuditEvent = {
       ...insertEvent,
       id,
+      comment,
+      changes,
       timestamp: now,
     };
     
