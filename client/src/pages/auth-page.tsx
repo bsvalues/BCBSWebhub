@@ -112,7 +112,7 @@ export default function AuthPage() {
             </div>
 
             <div className="text-center mb-6">
-              <p className="text-sm text-muted-foreground">Min County Assessor's Office</p>
+              <p className="text-sm text-muted-foreground">Benton County Assessor's Office, Washington</p>
             </div>
 
             <Tabs defaultValue="login" value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -227,7 +227,7 @@ export default function AuthPage() {
               <TabsContent value="register" className="mt-0">
                 <div className="bg-muted/10 p-3 rounded-md border-subtle mb-4">
                   <h2 className="text-base font-medium">Create New Account</h2>
-                  <p className="text-xs text-muted-foreground">Join the Min County Assessor's audit platform</p>
+                  <p className="text-xs text-muted-foreground">Join Benton County's property assessment audit platform</p>
                 </div>
                 
                 <Form {...registerForm}>
@@ -399,7 +399,7 @@ export default function AuthPage() {
         <div className="max-w-md glass-panel p-8 rounded-lg">
           <h1 className="text-3xl font-bold mb-4">County Audit Hub</h1>
           <p className="text-lg mb-6 opacity-90">
-            Simplifying auditing workflows for Min County Assessor's Office
+            Simplifying auditing workflows for Benton County Assessor's Office
           </p>
           
           {/* Analytics-style metrics section */}
@@ -487,7 +487,7 @@ export default function AuthPage() {
           
           <div className="mt-6 pt-4 border-t border-primary-foreground/20">
             <p className="text-sm opacity-70">
-              An internal application for Min County Assessor's Office in Washington state.
+              An internal application for Benton County Assessor's Office in Washington state.
             </p>
           </div>
         </div>
