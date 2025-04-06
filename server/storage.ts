@@ -426,7 +426,9 @@ export class DatabaseStorage implements IStorage {
       auditNumber: "A-1001",
       taxImpact: 750,
       reason: "Remodeled kitchen and bathroom",
-      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
+      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+      auditType: "standard",
+      propertyType: "residential"
     });
     
     await this.createAudit({
@@ -443,7 +445,9 @@ export class DatabaseStorage implements IStorage {
       taxImpact: -3400,
       reason: "Recent vacancy and market downturn",
       assignedToId: admin.id,
-      dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) // 14 days from now
+      dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days from now
+      auditType: "commercial",
+      propertyType: "commercial"
     });
     
     await this.createAudit({
@@ -458,6 +462,8 @@ export class DatabaseStorage implements IStorage {
       status: "pending",
       auditNumber: "A-1003",
       taxImpact: 650,
+      auditType: "complex",
+      propertyType: "agricultural",
       reason: "Land use change on portion of property",
       dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000) // 3 days from now
     });
