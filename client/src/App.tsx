@@ -7,6 +7,7 @@ import AuditQueue from "@/pages/audit-queue";
 import CreateAudit from "@/pages/create-audit";
 import Analytics from "@/pages/analytics";
 import AuditHistory from "@/pages/audit-history";
+import StyleDemo from "@/pages/style-demo";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import ConnectionAlert from "./components/connection-alert";
 import { Loader2 } from "lucide-react";
@@ -55,6 +56,7 @@ function AuthenticatedApp() {
       ) : (
         <Switch>
           <Route path="/auth" component={AuthPage} />
+          <Route path="/style-demo" component={StyleDemo} />
           <Route>
             <Redirect to="/auth" />
           </Route>

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benton County Styling - Example Usage</title>
+  <link rel="stylesheet" href="benton-county-styles.css">
+  <!-- You would include your own base styles here -->
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      color: #334155;
+      background-color: #f9fafb;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .example-section {
+      margin-bottom: 2rem;
+      padding: 1.5rem;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    h1, h2, h3 {
+      color: #1e293b;
+    }
+    code {
+      background-color: #f1f5f9;
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      font-family: Consolas, Monaco, 'Andale Mono', monospace;
+      font-size: 0.875rem;
+    }
+    .usage-info {
+      background-color: #f8fafc;
+      border-left: 4px solid #3b82f6;
+      padding: 1rem;
+      margin: 1rem 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Benton County Assessor's Office - UI Components</h1>
+    <p>This document demonstrates the standard UI components and styles used across Benton County applications.</p>
+    
+    <div class="usage-info">
+      <strong>Integration Instructions:</strong> Include <code>benton-county-styles.css</code> in your project to use these components.
+    </div>
+    
+    <div class="example-section">
+      <h2>Spreadsheet Form Fields</h2>
+      <p>Form fields styled to resemble a spreadsheet interface.</p>
+      
+      <div class="spreadsheet-section">
+        <h3>District Information</h3>
+        <div class="spreadsheet-field">
+          <label class="spreadsheet-label">Levy Year</label>
+          <div class="spreadsheet-input">
+            <input type="number" value="2023" class="spreadsheet-number-input" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+          </div>
+        </div>
+        
+        <div class="spreadsheet-field">
+          <label class="spreadsheet-label">Previous Rate</label>
+          <div class="spreadsheet-input">
+            <input type="text" value="1.5000" class="spreadsheet-number-input" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+          </div>
+        </div>
+        
+        <div class="spreadsheet-field">
+          <label class="spreadsheet-label">Calculated Rate</label>
+          <div class="spreadsheet-input">
+            <input type="text" value="1.4920" readonly class="spreadsheet-calculated-input" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+          </div>
+        </div>
+      </div>
+      
+      <div class="usage-info" style="margin-top: 1rem;">
+        <code>&lt;div class="spreadsheet-field"&gt;</code><br>
+        <code>&nbsp;&nbsp;&lt;label class="spreadsheet-label"&gt;Field Name&lt;/label&gt;</code><br>
+        <code>&nbsp;&nbsp;&lt;div class="spreadsheet-input"&gt;</code><br>
+        <code>&nbsp;&nbsp;&nbsp;&nbsp;&lt;input type="text" class="spreadsheet-number-input"&gt;</code><br>
+        <code>&nbsp;&nbsp;&lt;/div&gt;</code><br>
+        <code>&lt;/div&gt;</code>
+      </div>
+    </div>
+    
+    <div class="example-section">
+      <h2>Grid Table</h2>
+      <p>A table layout styled to resemble a spreadsheet grid.</p>
+      
+      <div class="grid-table-container">
+        <div class="grid-table">
+          <div class="grid-header">
+            <div class="grid-cell" style="width: 20%;">Property ID</div>
+            <div class="grid-cell" style="width: 30%; text-align: right;">Value</div>
+            <div class="grid-cell" style="width: 25%; text-align: right;">Prev. Tax</div>
+            <div class="grid-cell" style="width: 25%; text-align: right;">New Tax</div>
+          </div>
+          <div class="grid-body">
+            <div class="grid-row">
+              <div class="grid-cell" style="width: 20%;">P001</div>
+              <div class="grid-cell" style="width: 30%; text-align: right;">$450,000</div>
+              <div class="grid-cell" style="width: 25%; text-align: right;">$675.00</div>
+              <div class="grid-cell" style="width: 25%; text-align: right;">$671.40</div>
+            </div>
+            <div class="grid-row">
+              <div class="grid-cell" style="width: 20%;">P002</div>
+              <div class="grid-cell" style="width: 30%; text-align: right;">$375,000</div>
+              <div class="grid-cell" style="width: 25%; text-align: right;">$562.50</div>
+              <div class="grid-cell" style="width: 25%; text-align: right;">$559.50</div>
+            </div>
+            <div class="grid-row">
+              <div class="grid-cell" style="width: 20%;">P003</div>
+              <div class="grid-cell" style="width: 30%; text-align: right;">$520,000</div>
+              <div class="grid-cell" style="width: 25%; text-align: right;">$780.00</div>
+              <div class="grid-cell" style="width: 25%; text-align: right;">$775.84</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="usage-info" style="margin-top: 1rem;">
+        <code>&lt;div class="grid-table-container"&gt;</code><br>
+        <code>&nbsp;&nbsp;&lt;div class="grid-table"&gt;</code><br>
+        <code>&nbsp;&nbsp;&nbsp;&nbsp;&lt;div class="grid-header"&gt;...columns...&lt;/div&gt;</code><br>
+        <code>&nbsp;&nbsp;&nbsp;&nbsp;&lt;div class="grid-body"&gt;...rows...&lt;/div&gt;</code><br>
+        <code>&nbsp;&nbsp;&lt;/div&gt;</code><br>
+        <code>&lt;/div&gt;</code>
+      </div>
+    </div>
+    
+    <div class="example-section">
+      <h2>Status Timeline</h2>
+      <p>Visual representation of a process flow with statuses.</p>
+      
+      <div class="status-timeline">
+        <div class="status-step completed">
+          <div class="status-step-marker"></div>
+          <div class="status-step-connector">
+            <div class="status-step-line"></div>
+          </div>
+          <div class="status-step-label">Filing</div>
+        </div>
+        <div class="status-step completed">
+          <div class="status-step-marker"></div>
+          <div class="status-step-connector">
+            <div class="status-step-line"></div>
+          </div>
+          <div class="status-step-label">Review</div>
+        </div>
+        <div class="status-step current">
+          <div class="status-step-marker"></div>
+          <div class="status-step-connector">
+            <div class="status-step-line"></div>
+          </div>
+          <div class="status-step-label">Certification</div>
+        </div>
+        <div class="status-step pending">
+          <div class="status-step-marker"></div>
+          <div class="status-step-connector">
+            <div class="status-step-line"></div>
+          </div>
+          <div class="status-step-label">Final Approval</div>
+        </div>
+      </div>
+      
+      <div class="usage-info" style="margin-top: 1rem;">
+        <p>The timeline consists of steps with three possible statuses: <code>completed</code>, <code>current</code>, or <code>pending</code>.</p>
+      </div>
+    </div>
+    
+    <div class="example-section">
+      <h2>Stat Cards</h2>
+      <p>Compact cards for displaying key metrics and stats.</p>
+      
+      <div style="display: flex; flex-wrap: wrap; gap: 1rem;">
+        <div class="stat-card">
+          <h3 class="stat-card-title">Average Change</h3>
+          <p class="stat-card-value">-0.8%</p>
+          <div class="stat-card-trend" style="color: #10b981;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+              <polyline points="17 6 23 6 23 12"></polyline>
+            </svg>
+            <span>Below Threshold</span>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <h3 class="stat-card-title">Max Impact</h3>
+          <p class="stat-card-value">$14.56</p>
+          <div class="stat-card-trend" style="color: #10b981;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+              <polyline points="17 6 23 6 23 12"></polyline>
+            </svg>
+            <span>Residential</span>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <h3 class="stat-card-title">Revenue Change</h3>
+          <p class="stat-card-value">+$15,750</p>
+          <div class="stat-card-trend" style="color: #10b981;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+              <polyline points="17 6 23 6 23 12"></polyline>
+            </svg>
+            <span>From New Construction</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="example-section">
+      <h2>Integration with React</h2>
+      <p>To use these components in your React application:</p>
+      
+      <div class="usage-info">
+        <ol>
+          <li>Include <code>benton-county-styles.css</code> in your project</li>
+          <li>Use the provided React components from <code>BentonCountyExample.tsx</code></li>
+          <li>Check <code>style-demo.tsx</code> for implementation examples</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

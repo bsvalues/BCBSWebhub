@@ -1,0 +1,214 @@
+/* 
+ * Benton County Assessor's Office
+ * Shared styling for LevyMaster and County Audit Hub applications
+ *
+ * This CSS file contains custom styling for the spreadsheet-inspired 
+ * interface elements used across Benton County Assessor applications.
+ */
+
+/* ======== Spreadsheet Form Fields ======== */
+.spreadsheet-section {
+  background-color: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.spreadsheet-field {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  min-height: 2.5rem;
+}
+
+.spreadsheet-label {
+  width: 35%;
+  font-size: 0.875rem;
+  color: #4b5563;
+  padding-right: 0.75rem;
+}
+
+.spreadsheet-input {
+  width: 65%;
+}
+
+.spreadsheet-number-input {
+  font-family: 'Consolas', 'Monaco', monospace;
+  text-align: right;
+  background-color: #fcfcfc !important;
+}
+
+.spreadsheet-calculated-input {
+  font-family: 'Consolas', 'Monaco', monospace;
+  text-align: right;
+  background-color: #f8f8f8 !important;
+  color: #4a5568 !important;
+  font-weight: 600;
+}
+
+/* ======== Grid Table ======== */
+.grid-table-container {
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+}
+
+.grid-table {
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+.grid-header {
+  display: flex;
+  background-color: #f1f5f9;
+  border-bottom: 2px solid #e2e8f0;
+  font-weight: 600;
+}
+
+.grid-body {
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.grid-row {
+  display: flex;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.grid-row:last-child {
+  border-bottom: none;
+}
+
+.grid-cell {
+  padding: 0.5rem 0.75rem;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ======== Status Timeline ======== */
+.status-timeline {
+  display: flex;
+  margin: 1.5rem 0;
+  position: relative;
+}
+
+.status-step {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.status-step-marker {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background-color: #d1d5db;
+  border: 3px solid #f9fafb;
+  z-index: 1;
+}
+
+.status-step.completed .status-step-marker {
+  background-color: #10b981;
+}
+
+.status-step.current .status-step-marker {
+  background-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+}
+
+.status-step-connector {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+}
+
+.status-step-line {
+  background-color: #d1d5db;
+  height: 2px;
+  width: 100%;
+}
+
+.status-step.completed .status-step-line {
+  background-color: #10b981;
+}
+
+.status-step-label {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  text-align: center;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.status-step.current .status-step-label {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.status-step.completed .status-step-label {
+  color: #10b981;
+}
+
+/* ======== Stat Cards ======== */
+.stat-card {
+  background-color: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 1rem;
+  min-width: 150px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.stat-card-title {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-bottom: 0.25rem;
+}
+
+.stat-card-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.25rem;
+}
+
+.stat-card-trend {
+  display: flex;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.stat-card-trend svg {
+  margin-right: 0.25rem;
+}
+
+/* ======== Form Layout ======== */
+.levy-master-form {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* ======== Responsiveness ======== */
+@media screen and (max-width: 768px) {
+  .spreadsheet-field {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .spreadsheet-label {
+    width: 100%;
+    margin-bottom: 0.25rem;
+  }
+  
+  .spreadsheet-input {
+    width: 100%;
+  }
+}

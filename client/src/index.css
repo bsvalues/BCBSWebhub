@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Import the Benton County styles */
+@import './benton-county-styles.css';
+
 @layer base {
   :root {
     --shadow-color: 210 30% 10%;
