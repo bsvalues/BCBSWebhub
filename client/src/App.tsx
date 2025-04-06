@@ -8,6 +8,7 @@ import CreateAudit from "@/pages/create-audit";
 import Analytics from "@/pages/analytics";
 import AuditHistory from "@/pages/audit-history";
 import StyleDemo from "@/pages/style-demo";
+import ModernStyleDemo from "@/pages/modern-style-demo";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import ConnectionAlert from "./components/connection-alert";
 import { Loader2 } from "lucide-react";
@@ -50,6 +51,7 @@ function AuthenticatedApp() {
             <Route path="/create-audit" component={CreateAudit} />
             <Route path="/analytics" component={Analytics} />
             <Route path="/audit-history" component={AuditHistory} />
+            <Route path="/modern-style-demo" component={ModernStyleDemo} />
             <Route component={NotFound} />
           </Switch>
         </MainLayout>
@@ -57,6 +59,7 @@ function AuthenticatedApp() {
         <Switch>
           <Route path="/auth" component={AuthPage} />
           <Route path="/style-demo" component={StyleDemo} />
+          <Route path="/modern-style-demo" component={ModernStyleDemo} />
           <Route>
             <Redirect to="/auth" />
           </Route>
