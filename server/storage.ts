@@ -1,10 +1,13 @@
-import { users, audits, auditEvents, documents, type User, type InsertUser, type Audit, type InsertAudit, type AuditEvent, type InsertAuditEvent, type Document, type InsertDocument } from "@shared/schema";
+import { users, audits, auditEvents, documents, workflowDefinitions, workflowInstances, 
+  type User, type InsertUser, type Audit, type InsertAudit, type AuditEvent, type InsertAuditEvent, 
+  type Document, type InsertDocument, type WorkflowDefinition, type InsertWorkflowDefinition, 
+  type WorkflowInstance, type InsertWorkflowInstance, type WorkflowStep } from "@shared/schema";
 import session from "express-session";
 import { db } from "./db";
 import connectPg from "connect-pg-simple";
 import { Pool } from "@neondatabase/serverless";
 import * as bcrypt from "bcrypt";
-import { eq, desc, and, asc } from "drizzle-orm";
+import { eq, desc, and, asc, gt, lt, gte, lte, isNull, isNotNull } from "drizzle-orm";
 
 // Document interface with URL
 export interface DocumentWithUrl extends Document {
@@ -38,6 +41,19 @@ export interface IStorage {
   getDocumentById(id: number): Promise<Document | undefined>;
   createDocument(document: InsertDocument): Promise<Document>;
   deleteDocument(id: number): Promise<boolean>;
+  
+  // Workflow operations
+  getWorkflowDefinitions(auditType?: string): Promise<WorkflowDefinition[]>;
+  getWorkflowDefinitionById(id: number): Promise<WorkflowDefinition | undefined>;
+  createWorkflowDefinition(definition: InsertWorkflowDefinition): Promise<WorkflowDefinition>;
+  updateWorkflowDefinition(id: number, update: Partial<WorkflowDefinition>): Promise<WorkflowDefinition | undefined>;
+  deleteWorkflowDefinition(id: number): Promise<boolean>;
+  
+  // Workflow instance operations
+  getWorkflowInstance(auditId: number): Promise<WorkflowInstance | undefined>;
+  createWorkflowInstance(instance: InsertWorkflowInstance): Promise<WorkflowInstance>;
+  updateWorkflowInstance(id: number, update: Partial<WorkflowInstance>): Promise<WorkflowInstance | undefined>;
+  advanceWorkflow(auditId: number, nextStepId: string, userData?: any): Promise<WorkflowInstance | undefined>;
   
   // Session store
   sessionStore: any; // This avoids the type error with session.SessionStore
@@ -235,6 +251,140 @@ export class DatabaseStorage implements IStorage {
     return results.length > 0;
   }
   
+  // Workflow operations
+  async getWorkflowDefinitions(auditType?: string): Promise<WorkflowDefinition[]> {
+    let query = db.select().from(workflowDefinitions);
+    
+    if (auditType) {
+      query = query.where(eq(workflowDefinitions.auditType, auditType as any));
+    }
+    
+    // Only return active workflow definitions by default
+    query = query.where(eq(workflowDefinitions.isActive, true));
+    
+    return query.orderBy(asc(workflowDefinitions.name));
+  }
+  
+  async getWorkflowDefinitionById(id: number): Promise<WorkflowDefinition | undefined> {
+    const results = await db.select().from(workflowDefinitions).where(eq(workflowDefinitions.id, id));
+    return results.length > 0 ? results[0] : undefined;
+  }
+  
+  async createWorkflowDefinition(definition: InsertWorkflowDefinition): Promise<WorkflowDefinition> {
+    const results = await db.insert(workflowDefinitions).values(definition).returning();
+    return results[0];
+  }
+  
+  async updateWorkflowDefinition(id: number, update: Partial<WorkflowDefinition>): Promise<WorkflowDefinition | undefined> {
+    // First check if the workflow definition exists
+    const existingDef = await this.getWorkflowDefinitionById(id);
+    if (!existingDef) return undefined;
+    
+    // Add updatedAt timestamp
+    const updatedValues = {
+      ...update,
+      updatedAt: new Date()
+    };
+    
+    const results = await db
+      .update(workflowDefinitions)
+      .set(updatedValues)
+      .where(eq(workflowDefinitions.id, id))
+      .returning();
+      
+    return results.length > 0 ? results[0] : undefined;
+  }
+  
+  async deleteWorkflowDefinition(id: number): Promise<boolean> {
+    // We don't actually delete workflows, just mark them as inactive
+    const results = await db
+      .update(workflowDefinitions)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(workflowDefinitions.id, id))
+      .returning();
+      
+    return results.length > 0;
+  }
+  
+  // Workflow instance operations
+  async getWorkflowInstance(auditId: number): Promise<WorkflowInstance | undefined> {
+    const results = await db.select().from(workflowInstances).where(eq(workflowInstances.auditId, auditId));
+    return results.length > 0 ? results[0] : undefined;
+  }
+  
+  async createWorkflowInstance(instance: InsertWorkflowInstance): Promise<WorkflowInstance> {
+    const results = await db.insert(workflowInstances).values(instance).returning();
+    return results[0];
+  }
+  
+  async updateWorkflowInstance(id: number, update: Partial<WorkflowInstance>): Promise<WorkflowInstance | undefined> {
+    const results = await db
+      .update(workflowInstances)
+      .set(update)
+      .where(eq(workflowInstances.id, id))
+      .returning();
+      
+    return results.length > 0 ? results[0] : undefined;
+  }
+  
+  async advanceWorkflow(auditId: number, nextStepId: string, userData: any = {}): Promise<WorkflowInstance | undefined> {
+    // Get the workflow instance and related workflow definition
+    const instance = await this.getWorkflowInstance(auditId);
+    if (!instance) return undefined;
+    
+    // Get the workflow definition
+    const definition = await this.getWorkflowDefinitionById(instance.workflowDefinitionId);
+    if (!definition) return undefined;
+    
+    // Get the current step and find the target next step
+    const steps = definition.steps as WorkflowStep[];
+    const currentStep = steps[instance.currentStepIndex];
+    
+    // Make sure the requested next step is allowed from current step
+    if (!currentStep.nextSteps.includes(nextStepId)) {
+      throw new Error(`Step '${nextStepId}' is not a valid next step from '${currentStep.id}'`);
+    }
+    
+    // Find the index of the next step
+    const nextStepIndex = steps.findIndex(step => step.id === nextStepId);
+    if (nextStepIndex === -1) {
+      throw new Error(`Step '${nextStepId}' not found in workflow definition`);
+    }
+    
+    // Add the current step to completed steps
+    const completedSteps = [...(instance.completedStepIndexes as number[]), instance.currentStepIndex];
+    
+    // Update the workflow instance
+    const nextStep = steps[nextStepIndex];
+    const existingData = instance.data || {};
+    const updatedData = {
+      ...existingData,
+      ...(userData || {}),
+      [`step_${currentStep.id}_completed_at`]: new Date(),
+      [`step_${nextStep.id}_started_at`]: new Date()
+    };
+    
+    // Determine if the workflow is completed
+    const isComplete = nextStep.nextSteps.length === 0;
+    
+    const updatedInstance = await this.updateWorkflowInstance(instance.id, {
+      currentStepIndex: nextStepIndex,
+      completedStepIndexes: completedSteps,
+      status: isComplete ? "completed" : "active",
+      completedAt: isComplete ? new Date() : null,
+      data: updatedData
+    });
+    
+    // If the step has a status mapping, update the audit status
+    if (nextStep.statusMapping) {
+      await this.updateAudit(auditId, {
+        status: nextStep.statusMapping as any
+      });
+    }
+    
+    return updatedInstance;
+  }
+  
   // Initialize the database with seed data
   async seed() {
     // Check if users exist already
@@ -328,7 +478,145 @@ export class DatabaseStorage implements IStorage {
       comment: "Need to check recent comparable sales in the area"
     });
     
-    console.log("Database seeding complete");
+    // Create a sample workflow definition for residential properties
+    const residentialWorkflow = await this.createWorkflowDefinition({
+      name: "Residential Property Assessment",
+      description: "Standard workflow for residential property assessment reviews",
+      auditType: "residential",
+      createdById: admin.id,
+      steps: [
+        {
+          id: "initial_review",
+          name: "Initial Review",
+          description: "Initial assessment of the property value and tax impact",
+          role: "auditor",
+          nextSteps: ["supervisor_review", "request_additional_info"],
+          statusMapping: "in_progress",
+          formFields: ["notes", "initial_findings"]
+        },
+        {
+          id: "request_additional_info",
+          name: "Request Additional Information",
+          description: "Request additional documentation or information from the property owner",
+          role: "auditor",
+          nextSteps: ["initial_review"],
+          statusMapping: "needs_info",
+          formFields: ["requested_information", "due_date"]
+        },
+        {
+          id: "supervisor_review",
+          name: "Supervisor Review",
+          description: "Review by a supervisor to ensure accuracy and compliance",
+          role: "admin",
+          nextSteps: ["final_approval", "initial_review", "request_additional_info"],
+          statusMapping: "waiting_for_supervisor",
+          isApprovalStep: true,
+          formFields: ["supervisor_notes"]
+        },
+        {
+          id: "final_approval",
+          name: "Final Approval",
+          description: "Final approval of the assessment",
+          role: "admin",
+          nextSteps: [],
+          statusMapping: "approved",
+          isApprovalStep: true,
+          formFields: ["approval_notes"]
+        }
+      ]
+    });
+    
+    // Create a sample workflow for commercial properties with conditional logic
+    await this.createWorkflowDefinition({
+      name: "Commercial Property Assessment",
+      description: "Enhanced workflow for commercial property assessments",
+      auditType: "commercial",
+      thresholdAmount: 1000000, // Properties over $1M have additional review steps
+      createdById: admin.id,
+      steps: [
+        {
+          id: "initial_review",
+          name: "Initial Review",
+          description: "Initial assessment of the commercial property",
+          role: "auditor",
+          nextSteps: ["financial_analysis", "market_comparison"],
+          statusMapping: "in_progress",
+          formFields: ["notes", "property_class", "zoning_info"]
+        },
+        {
+          id: "financial_analysis",
+          name: "Financial Analysis",
+          description: "Detailed financial analysis of the property income and expenses",
+          role: "auditor",
+          nextSteps: ["market_comparison"],
+          statusMapping: "in_progress",
+          formFields: ["cap_rate", "noi", "vacancy_rate"]
+        },
+        {
+          id: "market_comparison",
+          name: "Market Comparison",
+          description: "Comparison with similar commercial properties",
+          role: "auditor",
+          nextSteps: ["supervisor_review"],
+          statusMapping: "in_progress",
+          formFields: ["comparable_properties", "price_per_sqft"]
+        },
+        {
+          id: "supervisor_review",
+          name: "Supervisor Review",
+          description: "Review by a supervisor",
+          role: "admin",
+          nextSteps: ["final_approval", "specialist_review"],
+          statusMapping: "waiting_for_supervisor",
+          isApprovalStep: true,
+          conditionalLogic: [
+            {
+              field: "proposedAssessment",
+              operator: "greaterThan",
+              value: 1000000,
+              nextStepOnMatch: "specialist_review",
+              nextStepOnFail: "final_approval"
+            }
+          ]
+        },
+        {
+          id: "specialist_review",
+          name: "Specialist Review",
+          description: "Special review for high-value properties",
+          role: "admin",
+          nextSteps: ["final_approval"],
+          statusMapping: "under_review",
+          isApprovalStep: true,
+          requiredApprovals: 2
+        },
+        {
+          id: "final_approval",
+          name: "Final Approval",
+          description: "Final approval of the commercial assessment",
+          role: "admin",
+          nextSteps: [],
+          statusMapping: "approved",
+          isApprovalStep: true
+        }
+      ]
+    });
+    
+    // Create a workflow instance for the first audit
+    await this.createWorkflowInstance({
+      auditId: audit1.id,
+      workflowDefinitionId: residentialWorkflow.id,
+      data: {
+        initial_findings: "Property appears to be accurately assessed based on recent renovations."
+      }
+    });
+    
+    // Update the audit to use the workflow
+    await this.updateAudit(audit1.id, {
+      workflowEnabled: true,
+      status: "in_progress"
+    });
+    
+    console.log("Database seeding complete with workflow definitions");
   }
 }
 

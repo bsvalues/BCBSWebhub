@@ -22,7 +22,8 @@ export default function BulkActions({ selectedAudits, onClose, onClearSelection 
   const queryClient = useQueryClient();
   
   // Fetch users for assignment
-  const { data: users } = useQueryClient().getQueryData<any[]>(["/api/users"]) || { data: [] };
+  const usersData = useQueryClient().getQueryData<any[]>(["/api/users"]) || [];
+  const users = usersData;
 
   // Bulk action mutation
   const bulkActionMutation = useMutation({

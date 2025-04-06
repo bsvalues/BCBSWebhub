@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { setupWebSocketServer } from "./socket";
 import { z } from "zod";
-import { insertAuditSchema, insertAuditEventSchema, insertDocumentSchema, users as usersTable } from "@shared/schema";
+import { insertAuditSchema, insertAuditEventSchema, insertDocumentSchema, users as usersTable, Audit } from "@shared/schema";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -348,6 +348,352 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Workflow Definition Endpoints
+  
+  // Get all workflow definitions
+  app.get("/api/workflows/definitions", ensureAuthenticated, async (req, res) => {
+    try {
+      const { auditType } = req.query;
+      const definitions = await storage.getWorkflowDefinitions(auditType as string);
+      res.json(definitions);
+    } catch (error) {
+      handleApiError(res, error);
+    }
+  });
+  
+  // Get workflow definition by ID
+  app.get("/api/workflows/definitions/:id", ensureAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid workflow definition ID" });
+      }
+      
+      const definition = await storage.getWorkflowDefinitionById(id);
+      if (!definition) {
+        return res.status(404).json({ error: "Workflow definition not found" });
+      }
+      
+      res.json(definition);
+    } catch (error) {
+      handleApiError(res, error);
+    }
+  });
+  
+  // Create a new workflow definition
+  app.post("/api/workflows/definitions", ensureAuthenticated, async (req, res) => {
+    try {
+      // Check if user has admin role
+      if (req.user!.role !== "admin") {
+        return res.status(403).json({ error: "Only administrators can create workflow definitions" });
+      }
+      
+      // Validate the request body
+      const definitionSchema = z.object({
+        name: z.string().min(1),
+        description: z.string().optional(),
+        auditType: z.enum(["standard", "complex", "commercial", "residential", "agriculture", "appeal", "correction"]),
+        thresholdAmount: z.number().optional(),
+        steps: z.array(z.any()).min(1), // Using any for steps as it's a complex structure
+      });
+      
+      const result = definitionSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: "Invalid workflow definition", details: result.error });
+      }
+      
+      // Create workflow definition
+      const workflowDef = await storage.createWorkflowDefinition({
+        ...result.data,
+        createdById: req.user!.id,
+        createdAt: new Date(),
+        isActive: true
+      });
+      
+      res.status(201).json(workflowDef);
+    } catch (error) {
+      handleApiError(res, error);
+    }
+  });
+  
+  // Update a workflow definition
+  app.put("/api/workflows/definitions/:id", ensureAuthenticated, async (req, res) => {
+    try {
+      // Check if user has admin role
+      if (req.user!.role !== "admin") {
+        return res.status(403).json({ error: "Only administrators can update workflow definitions" });
+      }
+      
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid workflow definition ID" });
+      }
+      
+      const existingDefinition = await storage.getWorkflowDefinitionById(id);
+      if (!existingDefinition) {
+        return res.status(404).json({ error: "Workflow definition not found" });
+      }
+      
+      // Validate the request body
+      const updateSchema = z.object({
+        name: z.string().min(1).optional(),
+        description: z.string().optional(),
+        auditType: z.enum(["standard", "complex", "commercial", "residential", "agriculture", "appeal", "correction"]).optional(),
+        thresholdAmount: z.number().optional(),
+        steps: z.array(z.any()).min(1).optional(), // Using any for steps as it's a complex structure
+        isActive: z.boolean().optional()
+      });
+      
+      const result = updateSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: "Invalid update data", details: result.error });
+      }
+      
+      // Update workflow definition
+      const updatedDefinition = await storage.updateWorkflowDefinition(id, {
+        ...result.data,
+        updatedAt: new Date()
+      });
+      
+      res.json(updatedDefinition);
+    } catch (error) {
+      handleApiError(res, error);
+    }
+  });
+  
+  // Delete (deactivate) a workflow definition
+  app.delete("/api/workflows/definitions/:id", ensureAuthenticated, async (req, res) => {
+    try {
+      // Check if user has admin role
+      if (req.user!.role !== "admin") {
+        return res.status(403).json({ error: "Only administrators can delete workflow definitions" });
+      }
+      
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid workflow definition ID" });
+      }
+      
+      const success = await storage.deleteWorkflowDefinition(id);
+      if (!success) {
+        return res.status(404).json({ error: "Workflow definition not found" });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      handleApiError(res, error);
+    }
+  });
+  
+  // Workflow Instance Endpoints
+  
+  // Get workflow instance for an audit
+  app.get("/api/audits/:id/workflow", ensureAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid audit ID" });
+      }
+      
+      const audit = await storage.getAuditById(id);
+      if (!audit) {
+        return res.status(404).json({ error: "Audit not found" });
+      }
+      
+      // Get the workflow instance for this audit
+      const instance = await storage.getWorkflowInstance(id);
+      if (!instance) {
+        return res.status(404).json({ error: "No workflow instance found for this audit" });
+      }
+      
+      // Get the workflow definition
+      const definition = await storage.getWorkflowDefinitionById(instance.workflowDefinitionId);
+      if (!definition) {
+        return res.status(500).json({ error: "Workflow definition not found" });
+      }
+      
+      res.json({
+        instance,
+        definition,
+        currentStep: (definition.steps as any[])[instance.currentStepIndex]
+      });
+    } catch (error) {
+      handleApiError(res, error);
+    }
+  });
+  
+  // Create a workflow instance for an audit
+  app.post("/api/audits/:id/workflow", ensureAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid audit ID" });
+      }
+      
+      const audit = await storage.getAuditById(id);
+      if (!audit) {
+        return res.status(404).json({ error: "Audit not found" });
+      }
+      
+      // Check if a workflow instance already exists for this audit
+      const existingInstance = await storage.getWorkflowInstance(id);
+      if (existingInstance) {
+        return res.status(400).json({ error: "Workflow instance already exists for this audit" });
+      }
+      
+      // Validate the request body
+      const instanceSchema = z.object({
+        workflowDefinitionId: z.number(),
+        initialData: z.record(z.any()).optional()
+      });
+      
+      const result = instanceSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: "Invalid workflow instance data", details: result.error });
+      }
+      
+      const { workflowDefinitionId, initialData } = result.data;
+      
+      // Verify the workflow definition exists
+      const definition = await storage.getWorkflowDefinitionById(workflowDefinitionId);
+      if (!definition) {
+        return res.status(404).json({ error: "Workflow definition not found" });
+      }
+      
+      // Create the workflow instance
+      const instance = await storage.createWorkflowInstance({
+        auditId: id,
+        workflowDefinitionId,
+        data: initialData || {},
+        startedAt: new Date()
+      });
+      
+      // Update the audit to mark it as using a workflow
+      await storage.updateAudit(id, {
+        workflowEnabled: true,
+        status: (definition.steps as any[])[0].statusMapping || "in_progress"
+      });
+      
+      // Create an audit event for workflow initiation
+      const auditEvent = await storage.createAuditEvent({
+        auditId: id,
+        userId: req.user!.id,
+        eventType: "workflow_started",
+        comment: `Started "${definition.name}" workflow`,
+        timestamp: new Date(),
+      });
+      
+      // Broadcast the update
+      const socketPayload = {
+        type: "WORKFLOW_STARTED",
+        audit,
+        instance,
+        definition,
+        event: auditEvent
+      };
+      global.io?.customEmit("audit-update", socketPayload);
+      
+      res.status(201).json({
+        instance,
+        definition,
+        currentStep: (definition.steps as any[])[0]
+      });
+    } catch (error) {
+      handleApiError(res, error);
+    }
+  });
+  
+  // Advance a workflow to the next step
+  app.post("/api/audits/:id/workflow/advance", ensureAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid audit ID" });
+      }
+      
+      const audit = await storage.getAuditById(id);
+      if (!audit) {
+        return res.status(404).json({ error: "Audit not found" });
+      }
+      
+      // Check if a workflow instance exists for this audit
+      const existingInstance = await storage.getWorkflowInstance(id);
+      if (!existingInstance) {
+        return res.status(404).json({ error: "No workflow instance found for this audit" });
+      }
+      
+      // Validate the request body
+      const advanceSchema = z.object({
+        nextStepId: z.string(),
+        formData: z.record(z.any()).optional(),
+        comment: z.string().optional()
+      });
+      
+      const result = advanceSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: "Invalid workflow advancement data", details: result.error });
+      }
+      
+      const { nextStepId, formData, comment } = result.data;
+      
+      // Get the workflow definition
+      const definition = await storage.getWorkflowDefinitionById(existingInstance.workflowDefinitionId);
+      if (!definition) {
+        return res.status(500).json({ error: "Workflow definition not found" });
+      }
+      
+      const steps = definition.steps as any[];
+      const currentStep = steps[existingInstance.currentStepIndex];
+      
+      // Check if the user has the required role for the current step
+      if (currentStep.role && currentStep.role !== req.user!.role) {
+        return res.status(403).json({ 
+          error: `Only users with the ${currentStep.role} role can advance this workflow step`
+        });
+      }
+      
+      // Advance the workflow
+      const updatedInstance = await storage.advanceWorkflow(id, nextStepId, formData);
+      if (!updatedInstance) {
+        return res.status(500).json({ error: "Failed to advance workflow" });
+      }
+      
+      // Find the new current step
+      const newCurrentStep = steps[updatedInstance.currentStepIndex];
+      
+      // Create an audit event for the workflow advancement
+      const auditEvent = await storage.createAuditEvent({
+        auditId: id,
+        userId: req.user!.id,
+        eventType: "workflow_advanced",
+        comment: comment || `Advanced workflow to "${newCurrentStep.name}" step`,
+        timestamp: new Date(),
+      });
+      
+      // Get the updated audit
+      const updatedAudit = await storage.getAuditById(id);
+      
+      // Broadcast the update
+      const socketPayload = {
+        type: "WORKFLOW_ADVANCED",
+        audit: updatedAudit,
+        instance: updatedInstance,
+        definition,
+        event: auditEvent
+      };
+      global.io?.customEmit("audit-update", socketPayload);
+      
+      res.json({
+        instance: updatedInstance,
+        definition,
+        currentStep: newCurrentStep,
+        audit: updatedAudit
+      });
+    } catch (error) {
+      handleApiError(res, error);
+    }
+  });
+  
   // Analytics endpoint for workload metrics
   app.get("/api/analytics/workload", ensureAuthenticated, async (req, res) => {
     try {
@@ -370,6 +716,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Get all audits completed in the date range
         const allAudits = await storage.getAudits();
         const completedAudits = allAudits.filter(audit => {
+          // Skip audits without an updatedAt timestamp
+          if (!audit.updatedAt) return false;
           const updatedAt = new Date(audit.updatedAt);
           return (
             updatedAt >= startDate && 
@@ -401,7 +749,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const assignedEvent = await storage.getAuditEvents(audit.id)
               .then(events => events.find(e => e.eventType === "assigned"));
             
-            if (assignedEvent) {
+            if (assignedEvent && audit.updatedAt) {
               const assignedTimestamp = new Date(assignedEvent.timestamp).getTime();
               const completedTimestamp = new Date(audit.updatedAt).getTime();
               totalProcessingTime += (completedTimestamp - assignedTimestamp) / 1000; // in seconds
@@ -457,6 +805,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Get all completed audits in the date range
         const allAudits = await storage.getAudits();
         const completedAudits = allAudits.filter(audit => {
+          // Skip audits without an updatedAt timestamp
+          if (!audit.updatedAt) return false;
           const updatedAt = new Date(audit.updatedAt);
           return (
             updatedAt >= startDate && 
@@ -469,7 +819,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const auditsByDay = new Map();
         
         for (const audit of completedAudits) {
-          const date = new Date(audit.updatedAt);
+          // We know updatedAt exists because we filtered on it above
+          const date = new Date(audit.updatedAt!);
           const dateStr = date.toISOString().substring(0, 10); // YYYY-MM-DD
           
           if (!auditsByDay.has(dateStr)) {
@@ -480,9 +831,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const events = await storage.getAuditEvents(audit.id);
           const assignEvent = events.find(e => e.eventType === "assigned");
           
-          if (assignEvent) {
+          if (assignEvent && audit.updatedAt) {
             const assignDate = new Date(assignEvent.timestamp);
-            const completedDate = new Date(audit.updatedAt);
+            const completedDate = new Date(audit.updatedAt!);
             const processingTime = (completedDate.getTime() - assignDate.getTime()) / 1000; // in seconds
             
             auditsByDay.get(dateStr).push({
@@ -494,7 +845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Calculate daily averages
         const processingTimes = Array.from(auditsByDay.entries()).map(([date, audits]) => {
-          const totalTime = audits.reduce((total, current) => total + current.processingTime, 0);
+          const totalTime = audits.reduce((total: number, current: {processingTime: number}) => total + current.processingTime, 0);
           const count = audits.length;
           const averageTime = count > 0 ? totalTime / count : 0;
           
@@ -509,9 +860,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         processingTimes.sort((a, b) => a.date.localeCompare(b.date));
         
         // Calculate overall average
-        const totalTime = processingTimes.reduce((total, current) => 
+        const totalTime = processingTimes.reduce((total: number, current: {averageTime: number, count: number}) => 
           total + (current.averageTime * current.count), 0);
-        const totalCount = processingTimes.reduce((count, current) => count + current.count, 0);
+        const totalCount = processingTimes.reduce((count: number, current: {count: number}) => count + current.count, 0);
         const overallAverage = totalCount > 0 ? totalTime / totalCount : 0;
         
         res.json({

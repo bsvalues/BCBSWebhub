@@ -20,13 +20,19 @@ export const insertUserSchema = createInsertSchema(users).pick({
   role: true,
 });
 
-// Audit status enum
+// Audit status enum - expanded with more granular states
 export const auditStatusEnum = pgEnum("audit_status", [
   "pending", 
   "in_progress",
   "approved", 
   "rejected", 
-  "needs_info"
+  "needs_info",
+  "waiting_for_supervisor",
+  "waiting_for_admin",
+  "under_review",
+  "approved_with_changes",
+  "resubmission_required",
+  "on_hold"
 ]);
 
 // Priority enum
@@ -35,6 +41,17 @@ export const priorityEnum = pgEnum("priority", [
   "normal",
   "high",
   "urgent"
+]);
+
+// Audit type enum - allows for different audit workflows
+export const auditTypeEnum = pgEnum("audit_type", [
+  "standard", // Standard assessment audit
+  "complex", // Complex assessments requiring additional review
+  "commercial", // Commercial property assessments
+  "residential", // Residential property assessments
+  "agriculture", // Agricultural property assessments
+  "appeal", // Tax appeal cases
+  "correction" // Error correction assessments
 ]);
 
 // Audit model
@@ -51,10 +68,14 @@ export const audits = pgTable("audits", {
   reason: text("reason"),
   status: auditStatusEnum("status").notNull().default("pending"),
   priority: priorityEnum("priority").notNull().default("normal"),
+  auditType: auditTypeEnum("audit_type").default("standard"),
   submittedById: integer("submitted_by_id").notNull(),
   submittedAt: timestamp("submitted_at").defaultNow().notNull(),
   dueDate: timestamp("due_date").notNull(),
   assignedToId: integer("assigned_to_id"),
+  workflowEnabled: boolean("workflow_enabled").default(false),
+  autoAssign: boolean("auto_assign").default(false),
+  metadata: json("metadata"), // For additional custom fields and data
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -97,6 +118,45 @@ export const insertDocumentSchema = createInsertSchema(documents).omit({
   id: true,
 });
 
+// Workflow definition model - enables custom approval workflows
+export const workflowDefinitions = pgTable("workflow_definitions", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  auditType: auditTypeEnum("audit_type").notNull(),
+  thresholdAmount: integer("threshold_amount"), // Financial threshold for this workflow
+  steps: json("steps").notNull(), // Array of workflow steps
+  createdById: integer("created_by_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  isActive: boolean("is_active").notNull().default(true),
+});
+
+// Create workflow definition schema
+export const insertWorkflowDefinitionSchema = createInsertSchema(workflowDefinitions).omit({
+  id: true,
+  updatedAt: true,
+});
+
+// Audit workflow instances - tracks an audit's progress through a workflow
+export const workflowInstances = pgTable("workflow_instances", {
+  id: serial("id").primaryKey(),
+  auditId: integer("audit_id").notNull().unique(), // One workflow per audit
+  workflowDefinitionId: integer("workflow_definition_id").notNull(),
+  currentStepIndex: integer("current_step_index").notNull().default(0),
+  completedStepIndexes: json("completed_step_indexes").notNull().default([]), // Array of completed steps
+  status: text("status").notNull().default("active"), // active, completed, canceled
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"), // Null until completed
+  data: json("data"), // Additional workflow data/state
+});
+
+// Create workflow instance schema
+export const insertWorkflowInstanceSchema = createInsertSchema(workflowInstances).omit({
+  id: true,
+  completedAt: true,
+});
+
 // Type exports
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -109,3 +169,29 @@ export type InsertAuditEvent = z.infer<typeof insertAuditEventSchema>;
 
 export type Document = typeof documents.$inferSelect;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+
+export type WorkflowDefinition = typeof workflowDefinitions.$inferSelect;
+export type InsertWorkflowDefinition = z.infer<typeof insertWorkflowDefinitionSchema>;
+
+export type WorkflowInstance = typeof workflowInstances.$inferSelect;
+export type InsertWorkflowInstance = z.infer<typeof insertWorkflowInstanceSchema>;
+
+// Custom type for workflow step configuration
+export type WorkflowStep = {
+  id: string;
+  name: string;
+  description?: string;
+  role: string; // Required role to complete this step
+  nextSteps: string[]; // Possible next steps after this one
+  formFields?: string[]; // Required form fields for this step
+  statusMapping: string; // Maps to an audit status
+  isApprovalStep?: boolean;
+  requiredApprovals?: number; // Number of approvals needed (for multi-person approval)
+  conditionalLogic?: {
+    field: string;
+    operator: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan';
+    value: string | number;
+    nextStepOnMatch: string;
+    nextStepOnFail: string;
+  }[];
+};
