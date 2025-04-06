@@ -1,0 +1,578 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Audit } from "@shared/schema";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import GeoPropertyCard from "@/components/geo-property-card";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { formatDate, formatCurrency } from "@/lib/utils";
+import { InfoIcon, Layers, PlusCircle, BarChart3, ListFilter, MapPin, Search, FilePenLine, AlertTriangle, 
+         Download, Compass, ArrowLeft, ChevronRight, ChevronDown, Ruler, Eye, Filter, Grid3X3, Maximize } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import ModernLayout from "@/layouts/modern-layout";
+
+/**
+ * GIS Dashboard for property visualizations and geospatial navigation
+ * Enhanced with new spatial context, map controls, and improved visual hierarchy
+ */
+export default function GISDashboard() {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const [selectedAudit, setSelectedAudit] = useState<Audit | null>(null);
+  const [mapZoom, setMapZoom] = useState<number>(1);
+  const [layers, setLayers] = useState({
+    parcels: true,
+    roads: true,
+    buildings: true,
+    waterways: false,
+    boundaries: true,
+    labels: true
+  });
+  const [propertyTypeFilter, setPropertyTypeFilter] = useState<string[]>([
+    'residential',
+    'commercial',
+    'agricultural',
+    'industrial'
+  ]);
+
+  // Fetch pending audits
+  const { data: pendingAudits = [], isLoading: isPendingLoading } = useQuery<Audit[]>({
+    queryKey: ['/api/audits/pending'],
+    staleTime: 30000,
+  });
+
+  // Fetch recent audits
+  const { data: recentAudits = [], isLoading: isRecentLoading } = useQuery<Audit[]>({
+    queryKey: ['/api/audits/recent'],
+    staleTime: 30000,
+  });
+
+  // Combined audits for display
+  const audits = [...recentAudits];
+  const loading = isPendingLoading || isRecentLoading;
+  
+  // Function to toggle a layer
+  const toggleLayer = (layer: keyof typeof layers) => {
+    setLayers({
+      ...layers,
+      [layer]: !layers[layer]
+    });
+  };
+  
+  // Function to toggle a property type filter
+  const togglePropertyType = (type: string) => {
+    if (propertyTypeFilter.includes(type)) {
+      setPropertyTypeFilter(propertyTypeFilter.filter(t => t !== type));
+    } else {
+      setPropertyTypeFilter([...propertyTypeFilter, type]);
+    }
+  };
+  
+  // Function to get initials from user name
+  const getInitials = (name: string) => {
+    if (!name) return "U";
+    return name.split(' ').map(part => part[0]).join('').toUpperCase();
+  };
+  
+  // Function to generate a coordinate within a range
+  const generateCoordinate = (baseX: number, baseY: number, index: number) => {
+    // Generate deterministic but varied coordinates based on ID
+    const x = baseX + ((index * 7) % 90);
+    const y = baseY + ((index * 13) % 80);
+    return { x, y };
+  };
+  
+  // Generate property parcels for the map
+  const generateParcels = () => {
+    if (!audits || audits.length === 0) return [];
+    
+    const parcels = audits.map((audit, index) => {
+      // Generate coordinates for display
+      const coord = generateCoordinate(10, 10, audit.id);
+      const width = 20 + (audit.id % 15);
+      const height = 15 + (audit.id % 10);
+      
+      // Determine property type
+      const propertyType = audit.propertyType || 
+        ['residential', 'commercial', 'agricultural', 'industrial'][audit.id % 4];
+        
+      return {
+        id: audit.id,
+        audit,
+        x: coord.x,
+        y: coord.y,
+        width: width * mapZoom,
+        height: height * mapZoom,
+        propertyType
+      };
+    });
+    
+    return parcels;
+  };
+  
+  const parcels = generateParcels();
+  
+  return (
+    <ModernLayout>
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-700">
+              Geospatial Dashboard
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              Interactive property map and assessment visualization system
+            </p>
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                type="search"
+                placeholder="Search properties..."
+                className="w-[200px] pl-9 h-9 rounded-full"
+              />
+            </div>
+            
+            <Select defaultValue="all">
+              <SelectTrigger className="w-[140px] h-9 rounded-full">
+                <SelectValue placeholder="Filter by type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Properties</SelectItem>
+                <SelectItem value="residential">Residential</SelectItem>
+                <SelectItem value="commercial">Commercial</SelectItem>
+                <SelectItem value="agricultural">Agricultural</SelectItem>
+                <SelectItem value="industrial">Industrial</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <Button className="h-9 rounded-full bg-primary hover:bg-primary/90 transition-colors">
+              <PlusCircle className="h-4 w-4 mr-2" />
+              New Property
+            </Button>
+          </div>
+        </div>
+        
+        <div className="geo-dashboard">
+          {/* Main map visualization */}
+          <div className="md:col-span-2 space-y-4">
+            <Card className="dashboard-card border-subtle">
+              <CardHeader className="pb-2">
+                <div className="flex flex-wrap justify-between items-center gap-2">
+                  <div>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <div className="p-1.5 rounded-full bg-blue-50 dark:bg-blue-950">
+                        <MapPin className="h-4 w-4 text-primary" />
+                      </div>
+                      Property Assessment Map
+                    </CardTitle>
+                    <CardDescription>
+                      Interactive visualization of county assessment data
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 bg-muted/30 rounded-full px-3 py-1">
+                      <Ruler className="h-4 w-4 text-muted-foreground" />
+                      <Slider 
+                        className="w-24" 
+                        value={[mapZoom]} 
+                        min={0.5} 
+                        max={2} 
+                        step={0.1}
+                        onValueChange={(value) => setMapZoom(value[0])}
+                      />
+                    </div>
+                    <Button variant="outline" size="sm" className="rounded-full h-8 w-8 p-0">
+                      <Maximize className="h-4 w-4" />
+                      <span className="sr-only">Fullscreen</span>
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {/* The map container */}
+                <div className="map-container h-[500px] relative overflow-hidden">
+                  {/* Topographic pattern overlay */}
+                  <div className="absolute inset-0 pointer-events-none opacity-10" 
+                       style={{backgroundImage: 'var(--topo-bg)'}}></div>
+                  
+                  {/* Coordinate grid */}
+                  <div className="absolute inset-0 pointer-events-none opacity-[0.025]"
+                       style={{
+                         backgroundImage: 'var(--grid-pattern)',
+                         backgroundSize: 'var(--grid-size) var(--grid-size)'
+                       }}></div>
+                       
+                  {/* Map scale at the bottom */}
+                  <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 z-10
+                                  bg-background/80 backdrop-blur-sm px-2 py-0.5 rounded-sm text-xs font-mono border border-border/50">
+                    Scale: 1:{Math.round(500 / mapZoom)}
+                  </div>
+                  
+                  {/* North indicator */}
+                  <div className="absolute top-3 right-3 h-8 w-8 flex items-center justify-center
+                                  bg-background/80 backdrop-blur-sm rounded-full border border-border/50 z-20">
+                    <Compass className="h-4 w-4 text-primary" />
+                  </div>
+                  
+                  {/* Simulated parcels/properties on the map */}
+                  {layers.parcels && audits.map((audit) => {
+                    const parcel = parcels.find(p => p.id === audit.id);
+                    if (!parcel) return null;
+                    
+                    return (
+                      <div
+                        key={audit.id}
+                        className={`parcel ${parcel.propertyType} ${selectedAudit?.id === audit.id ? 'selected' : ''}`}
+                        style={{
+                          left: `${parcel.x}px`,
+                          top: `${parcel.y}px`,
+                          width: `${parcel.width}px`,
+                          height: `${parcel.height}px`,
+                        }}
+                        onClick={() => setSelectedAudit(audit)}
+                      >
+                        {layers.labels && (
+                          <div className="absolute -top-5 left-1/2 transform -translate-x-1/2 text-xs font-mono 
+                                          bg-background/80 backdrop-blur-sm px-1 py-0.5 rounded-sm border border-border/50">
+                            {audit.propertyId || `P${audit.id}`}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  
+                  {/* Layers panel */}
+                  <div className="map-overlay top-left glass-panel">
+                    <div className="text-xs font-medium mb-2 flex items-center gap-1.5">
+                      <Layers className="h-3.5 w-3.5 text-primary" />
+                      Map Layers
+                    </div>
+                    <div className="space-y-1">
+                      <div className="layer-toggle">
+                        <Switch 
+                          checked={layers.parcels} 
+                          onCheckedChange={() => toggleLayer('parcels')} 
+                          className="h-5 w-9 data-[state=checked]:bg-primary"
+                        />
+                        <span>Parcels</span>
+                      </div>
+                      
+                      <div className="layer-toggle">
+                        <Switch 
+                          checked={layers.roads} 
+                          onCheckedChange={() => toggleLayer('roads')} 
+                          className="h-5 w-9 data-[state=checked]:bg-primary"
+                        />
+                        <span>Roads</span>
+                      </div>
+                      
+                      <div className="layer-toggle">
+                        <Switch 
+                          checked={layers.buildings} 
+                          onCheckedChange={() => toggleLayer('buildings')} 
+                          className="h-5 w-9 data-[state=checked]:bg-primary"
+                        />
+                        <span>Buildings</span>
+                      </div>
+                      
+                      <div className="layer-toggle">
+                        <Switch 
+                          checked={layers.waterways} 
+                          onCheckedChange={() => toggleLayer('waterways')} 
+                          className="h-5 w-9 data-[state=checked]:bg-primary"
+                        />
+                        <span>Waterways</span>
+                      </div>
+                      
+                      <div className="layer-toggle">
+                        <Switch 
+                          checked={layers.boundaries} 
+                          onCheckedChange={() => toggleLayer('boundaries')} 
+                          className="h-5 w-9 data-[state=checked]:bg-primary"
+                        />
+                        <span>Boundaries</span>
+                      </div>
+                      
+                      <div className="layer-toggle">
+                        <Switch 
+                          checked={layers.labels} 
+                          onCheckedChange={() => toggleLayer('labels')} 
+                          className="h-5 w-9 data-[state=checked]:bg-primary"
+                        />
+                        <span>Labels</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Legend */}
+                  <div className="map-overlay bottom-right glass-panel">
+                    <div className="text-xs font-medium mb-2 flex items-center gap-1.5">
+                      <Filter className="h-3.5 w-3.5 text-primary" />
+                      Property Types
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      <Button 
+                        variant={propertyTypeFilter.includes('residential') ? "default" : "outline"} 
+                        size="sm"
+                        className="h-6 text-xs px-2 py-0 flex gap-1 items-center"
+                        onClick={() => togglePropertyType('residential')}
+                      >
+                        <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                        Residential
+                      </Button>
+                      
+                      <Button 
+                        variant={propertyTypeFilter.includes('commercial') ? "default" : "outline"} 
+                        size="sm"
+                        className="h-6 text-xs px-2 py-0 flex gap-1 items-center"
+                        onClick={() => togglePropertyType('commercial')}
+                      >
+                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                        Commercial
+                      </Button>
+                      
+                      <Button 
+                        variant={propertyTypeFilter.includes('agricultural') ? "default" : "outline"} 
+                        size="sm"
+                        className="h-6 text-xs px-2 py-0 flex gap-1 items-center"
+                        onClick={() => togglePropertyType('agricultural')}
+                      >
+                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                        Agricultural
+                      </Button>
+                      
+                      <Button 
+                        variant={propertyTypeFilter.includes('industrial') ? "default" : "outline"} 
+                        size="sm"
+                        className="h-6 text-xs px-2 py-0 flex gap-1 items-center"
+                        onClick={() => togglePropertyType('industrial')}
+                      >
+                        <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                        Industrial
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Location info */}
+                  <div className="map-overlay bottom-left glass-panel">
+                    <div className="text-xs font-mono flex items-center gap-1.5">
+                      <Grid3X3 className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-muted-foreground">46.2087° N, 119.1360° W</span>
+                    </div>
+                    <div className="text-xs mt-1 font-medium text-foreground">
+                      Benton County, Washington
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+              <CardFooter className="flex justify-between items-center py-2 px-4 border-t border-border/30 bg-muted/10">
+                <div className="flex items-center text-xs text-muted-foreground">
+                  <Eye className="h-3.5 w-3.5 mr-1.5" />
+                  Last updated: {new Date().toLocaleDateString()}
+                </div>
+                
+                <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs">
+                  <Download className="h-3.5 w-3.5" />
+                  Export Map
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
+          
+          {/* Sidebar with property details and info */}
+          <div className="space-y-6">
+            {/* Selected property details */}
+            <Card className="dashboard-card">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Property Details</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {selectedAudit ? (
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <h3 className="font-medium">{selectedAudit.title || `Property #${selectedAudit.propertyId || selectedAudit.id}`}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {selectedAudit.address || "No address available"}
+                      </p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <div className="text-xs text-muted-foreground">Audit #</div>
+                        <div>{selectedAudit.auditNumber || `A-${selectedAudit.id}`}</div>
+                      </div>
+                      
+                      <div>
+                        <div className="text-xs text-muted-foreground">Status</div>
+                        <div className="capitalize">{selectedAudit.status?.replace('_', ' ')}</div>
+                      </div>
+                      
+                      <div>
+                        <div className="text-xs text-muted-foreground">Type</div>
+                        <div className="capitalize">{selectedAudit.propertyType || "Residential"}</div>
+                      </div>
+                      
+                      <div>
+                        <div className="text-xs text-muted-foreground">Priority</div>
+                        <div className="capitalize">{selectedAudit.priority}</div>
+                      </div>
+                      
+                      <div>
+                        <div className="text-xs text-muted-foreground">Assessment</div>
+                        <div>{formatCurrency(selectedAudit.currentAssessment) || "Not assessed"}</div>
+                      </div>
+                      
+                      <div>
+                        <div className="text-xs text-muted-foreground">Last Updated</div>
+                        <div>{formatDate(selectedAudit.updatedAt)}</div>
+                      </div>
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="flex gap-2">
+                      <Button size="sm" className="flex-1">
+                        <FilePenLine className="h-4 w-4 mr-2" />
+                        Edit
+                      </Button>
+                      <Button size="sm" variant="outline" className="flex-1">
+                        <MapPin className="h-4 w-4 mr-2" />
+                        View on Map
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-6 text-center text-muted-foreground">
+                    <InfoIcon className="h-12 w-12 mb-2 opacity-20" />
+                    <p>Select a property on the map to view details</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            
+            {/* Quick stats */}
+            <Card className="dashboard-card">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Property Stats</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="stat-card text-center p-3">
+                    <div className="stat-title">Pending</div>
+                    <div className="stat-value">{pendingAudits.length}</div>
+                  </div>
+                  
+                  <div className="stat-card text-center p-3">
+                    <div className="stat-title">Urgent</div>
+                    <div className="stat-value">{audits.filter(a => a.priority === "urgent").length}</div>
+                  </div>
+                  
+                  <div className="stat-card text-center p-3">
+                    <div className="stat-title">Commercial</div>
+                    <div className="stat-value">{audits.filter(a => a.propertyType === "commercial").length}</div>
+                  </div>
+                  
+                  <div className="stat-card text-center p-3">
+                    <div className="stat-title">Residential</div>
+                    <div className="stat-value">{audits.filter(a => a.propertyType === "residential").length}</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+        
+        {/* Recent properties section */}
+        <div className="mt-6">
+          <Tabs defaultValue="recent">
+            <TabsList>
+              <TabsTrigger value="recent">Recent Properties</TabsTrigger>
+              <TabsTrigger value="urgent">Urgent Reviews</TabsTrigger>
+              <TabsTrigger value="yours">Assigned to You</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="recent" className="mt-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {loading ? (
+                  Array(4).fill(0).map((_, index) => (
+                    <Card key={index} className="property-card animate-pulse h-64" />
+                  ))
+                ) : (
+                  recentAudits.map((audit: Audit) => (
+                    <GeoPropertyCard 
+                      key={audit.id} 
+                      audit={audit} 
+                      onSelect={setSelectedAudit}
+                      selected={selectedAudit?.id === audit.id}
+                    />
+                  ))
+                )}
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="urgent" className="mt-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {audits
+                  .filter((audit: Audit) => audit.priority === 'urgent')
+                  .map((audit: Audit) => (
+                    <GeoPropertyCard 
+                      key={audit.id} 
+                      audit={audit} 
+                      onSelect={setSelectedAudit}
+                      selected={selectedAudit?.id === audit.id}
+                    />
+                  ))}
+              </div>
+              
+              {audits.filter((audit: Audit) => audit.priority === 'urgent').length === 0 && (
+                <div className="text-center py-12">
+                  <AlertTriangle className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-3" />
+                  <h3 className="text-lg font-medium">No urgent reviews</h3>
+                  <p className="text-muted-foreground mt-1">
+                    There are no properties requiring urgent review at this time
+                  </p>
+                </div>
+              )}
+            </TabsContent>
+            
+            <TabsContent value="yours" className="mt-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {audits
+                  .filter((audit: Audit) => audit.assignedToId === user?.id)
+                  .map((audit: Audit) => (
+                    <GeoPropertyCard 
+                      key={audit.id} 
+                      audit={audit} 
+                      onSelect={setSelectedAudit}
+                      selected={selectedAudit?.id === audit.id}
+                    />
+                  ))}
+              </div>
+              
+              {audits.filter((audit: Audit) => audit.assignedToId === user?.id).length === 0 && (
+                <div className="text-center py-12">
+                  <BarChart3 className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-3" />
+                  <h3 className="text-lg font-medium">No assigned properties</h3>
+                  <p className="text-muted-foreground mt-1">
+                    You haven't been assigned any properties for review
+                  </p>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
+    </ModernLayout>
+  );
+}

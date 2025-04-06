@@ -18,6 +18,7 @@ import {
   FolderTree,
   PieChart,
   Mail,
+  MapPin,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Badge } from "@/components/ui/badge";
@@ -217,6 +218,13 @@ export default function ModernSidebar() {
               isActive={location === "/analytics"}
             />
             <SidebarLink
+              href="/gis-dashboard"
+              icon={<MapPin size={20} />}
+              label="GIS Dashboard"
+              isCollapsed={true}
+              isActive={location === "/gis-dashboard"}
+            />
+            <SidebarLink
               href="/style-demo"
               icon={<Layers size={20} />}
               label="Style Guide"
@@ -280,6 +288,13 @@ export default function ModernSidebar() {
                 label="Performance Metrics"
                 isCollapsed={isCollapsed}
                 isActive={location === "/metrics"}
+              />
+              <SidebarLink
+                href="/gis-dashboard"
+                icon={<MapPin size={18} />}
+                label="GIS Dashboard"
+                isCollapsed={isCollapsed}
+                isActive={location === "/gis-dashboard"}
               />
             </SidebarGroup>
 

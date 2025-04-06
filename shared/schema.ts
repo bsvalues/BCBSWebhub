@@ -54,6 +54,14 @@ export const auditTypeEnum = pgEnum("audit_type", [
   "correction" // Error correction assessments
 ]);
 
+// Property type enum for GIS features
+export const propertyTypeEnum = pgEnum("property_type", [
+  "residential",
+  "commercial", 
+  "agricultural",
+  "industrial"
+]);
+
 // Audit model
 export const audits = pgTable("audits", {
   id: serial("id").primaryKey(),
@@ -69,6 +77,7 @@ export const audits = pgTable("audits", {
   status: auditStatusEnum("status").notNull().default("pending"),
   priority: priorityEnum("priority").notNull().default("normal"),
   auditType: auditTypeEnum("audit_type").default("standard"),
+  propertyType: propertyTypeEnum("property_type").default("residential"),
   submittedById: integer("submitted_by_id").notNull(),
   submittedAt: timestamp("submitted_at").defaultNow().notNull(),
   dueDate: timestamp("due_date").notNull(),

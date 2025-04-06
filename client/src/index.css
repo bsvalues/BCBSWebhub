@@ -5,37 +5,152 @@
 /* Import the Benton County styles */
 @import './benton-county-styles.css';
 
+/* GIS Dashboard Styles - Enhanced for Geospatial Applications */
+.parcel {
+  position: absolute;
+  border-radius: 1px;
+  border: 2px solid transparent;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  transform-origin: center;
+}
+
+.parcel:hover {
+  opacity: 0.9;
+  z-index: 10;
+  box-shadow: 0 0 0 2px white, 0 0 0 4px var(--primary);
+}
+
+.parcel.selected {
+  opacity: 1;
+  z-index: 20;
+  box-shadow: 0 0 0 2px white, 0 0 0 4px var(--primary);
+  border-color: var(--primary);
+}
+
+.parcel.residential {
+  background-color: rgba(251, 191, 36, 0.2);
+  border-color: rgba(251, 191, 36, 0.6);
+}
+
+.parcel.commercial {
+  background-color: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.6);
+}
+
+.parcel.agricultural {
+  background-color: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.6);
+}
+
+.parcel.industrial {
+  background-color: rgba(168, 85, 247, 0.2);
+  border-color: rgba(168, 85, 247, 0.6);
+}
+
+.property-card {
+  @apply relative overflow-hidden rounded-md border border-border bg-card transition-all duration-300;
+}
+
+.property-map-preview {
+  @apply relative h-36 w-full bg-muted bg-cover bg-center;
+}
+
+.coordinate-display {
+  @apply text-xs px-2 py-1 bg-background/80 backdrop-blur-sm rounded-sm;
+}
+
+/* Map animation for the dashboard */
+@keyframes mapPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(var(--primary-rgb), 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(var(--primary-rgb), 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--primary-rgb), 0);
+  }
+}
+
+.map-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: 
+    radial-gradient(circle at 30% 20%, rgba(var(--primary-rgb), 0.03), transparent 25%),
+    radial-gradient(circle at 80% 60%, rgba(var(--primary-rgb), 0.05), transparent 30%);
+}
+
+.ease-out-expo {
+  transition-timing-function: cubic-bezier(0.19, 1, 0.22, 1);
+}
+
 @layer base {
   :root {
-    --shadow-color: 210 30% 10%;
+    /* Enhanced shadow system for depth */
+    --shadow-color: 210 40% 12%;
     --shadow-elevation-low:
-      0px 0.2px 0.3px hsl(var(--shadow-color) / 0.07),
-      0px 0.3px 0.5px -1.2px hsl(var(--shadow-color) / 0.07),
-      0px 0.7px 1.4px -2.5px hsl(var(--shadow-color) / 0.07);
-    --shadow-elevation-medium:
       0px 0.2px 0.3px hsl(var(--shadow-color) / 0.08),
-      0px 0.8px 1.6px -0.8px hsl(var(--shadow-color) / 0.08),
-      0px 2.2px 4.4px -1.7px hsl(var(--shadow-color) / 0.08),
-      0px 5.3px 10.6px -2.5px hsl(var(--shadow-color) / 0.08);
+      0px 0.4px 0.6px -0.8px hsl(var(--shadow-color) / 0.08),
+      0px 1px 1.8px -1.7px hsl(var(--shadow-color) / 0.08);
+    --shadow-elevation-medium:
+      0px 0.2px 0.3px hsl(var(--shadow-color) / 0.09),
+      0px 0.9px 1.8px -0.6px hsl(var(--shadow-color) / 0.09),
+      0px 2.3px 4.6px -1.3px hsl(var(--shadow-color) / 0.09),
+      0px 5.6px 11.2px -1.9px hsl(var(--shadow-color) / 0.09);
     --shadow-elevation-high:
-      0px 0.2px 0.3px hsl(var(--shadow-color) / 0.07),
-      0px 1.3px 2.6px -0.4px hsl(var(--shadow-color) / 0.07),
-      0px 2.8px 5.6px -0.7px hsl(var(--shadow-color) / 0.07),
-      0px 4.6px 9.2px -1.1px hsl(var(--shadow-color) / 0.07),
-      0px 7.6px 15.2px -1.4px hsl(var(--shadow-color) / 0.07),
-      0px 12.4px 24.8px -1.8px hsl(var(--shadow-color) / 0.07),
-      0px 19px 38px -2.1px hsl(var(--shadow-color) / 0.07);
+      0px 0.2px 0.3px hsl(var(--shadow-color) / 0.08),
+      0px 1.5px 3px -0.3px hsl(var(--shadow-color) / 0.08),
+      0px 3.1px 6.2px -0.6px hsl(var(--shadow-color) / 0.08),
+      0px 5.2px 10.5px -0.9px hsl(var(--shadow-color) / 0.08),
+      0px 8.6px 17.2px -1.2px hsl(var(--shadow-color) / 0.08),
+      0px 13.8px 27.6px -1.5px hsl(var(--shadow-color) / 0.08),
+      0px 21px 42px -1.8px hsl(var(--shadow-color) / 0.08);
     
-    /* Grid-like pattern for spreadsheet feel */
-    --grid-color: rgba(0, 0, 0, 0.06);
-    --grid-size: 24px;
+    /* Topographic-inspired patterns - mimics contour lines */
+    --topo-bg: repeating-linear-gradient(
+      -45deg,
+      rgba(130, 180, 230, 0.03) 0px,
+      rgba(130, 180, 230, 0.03) 1px,
+      transparent 1px,
+      transparent 8px
+    );
     
-    /* Analytics accent colors */
-    --chart-accent-1: #4285F4;
-    --chart-accent-2: #34A853; 
-    --chart-accent-3: #FBBC05;
-    --chart-accent-4: #EA4335;
-    --chart-accent-5: #8966B9;
+    /* Grid-like pattern for spreadsheet feel - scaled for precision */
+    --grid-color: rgba(0, 0, 0, 0.04);
+    --grid-size: 20px;
+    --grid-pattern: 
+      linear-gradient(to right, var(--grid-color) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-color) 1px, transparent 1px);
+    
+    /* Map-inspired color palette - extending the county's existing colors */
+    --map-water: #B8D6F5;
+    --map-land: #F5F5F0;
+    --map-urban: #E6E6E6;
+    --map-park: #D9E7CA;
+    --map-highlight: rgba(255, 240, 175, 0.5);
+    
+    /* Precision analytics colors derived from GIS systems */
+    --chart-accent-1: #3B78E7; /* Primary blue - water, hydrology */
+    --chart-accent-2: #29A369; /* Land use, vegetation */
+    --chart-accent-3: #F2B705; /* Highlighted properties */
+    --chart-accent-4: #D64242; /* Priority items, alerts */
+    --chart-accent-5: #8966B9; /* Special designations */
+    --chart-accent-6: #63A8D9; /* Secondary water/resources */
+    --chart-accent-7: #96BF7A; /* Agricultural land */
+    
+    /* Animation speeds - smooth and precise */
+    --transition-fast: 150ms;
+    --transition-medium: 250ms;
+    --transition-slow: 350ms;
+    
+    /* Custom easing functions for map-like movements */
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out-quad: cubic-bezier(0.45, 0, 0.55, 1);
   }
 
   * {
@@ -352,4 +467,201 @@
 
 .status-line.completed {
   @apply bg-primary;
+}
+
+/* GIS-specific components */
+
+/* Map container with proper aspect ratio */
+.map-container {
+  @apply relative w-full rounded-lg overflow-hidden border-subtle bg-[var(--map-land)];
+  background-image: var(--topo-bg);
+  aspect-ratio: 4/3;
+}
+
+/* Map overlays and controls */
+.map-overlay {
+  @apply absolute p-2 rounded bg-background/80 backdrop-blur-sm shadow-md z-10 text-sm;
+}
+
+.map-overlay.top-left {
+  @apply top-3 left-3;
+}
+
+.map-overlay.top-right {
+  @apply top-3 right-3;
+}
+
+.map-overlay.bottom-left {
+  @apply bottom-3 left-3;
+}
+
+.map-overlay.bottom-right {
+  @apply bottom-3 right-3;
+}
+
+/* Parcel/Property visualization */
+.parcel {
+  @apply border-2 absolute rounded-sm transform-gpu transition-all duration-300;
+  background-image: linear-gradient(45deg, transparent 25%, var(--map-highlight) 25%, var(--map-highlight) 50%, transparent 50%, transparent 75%, var(--map-highlight) 75%);
+  background-size: 8px 8px;
+}
+
+.parcel.selected {
+  @apply outline outline-2 outline-primary shadow-lg;
+  z-index: 5;
+  transform: translateY(-2px) scale(1.02);
+}
+
+.parcel.residential {
+  @apply border-amber-600/60 bg-amber-50/30;
+}
+
+.parcel.commercial {
+  @apply border-blue-600/60 bg-blue-50/30;
+}
+
+.parcel.agricultural {
+  @apply border-green-600/60 bg-green-50/30;
+}
+
+.parcel.industrial {
+  @apply border-purple-600/60 bg-purple-50/30;
+}
+
+/* Legend elements */
+.map-legend {
+  @apply flex flex-col gap-1 p-2 text-xs;
+}
+
+.legend-item {
+  @apply flex items-center gap-2;
+}
+
+.legend-color {
+  @apply w-4 h-4 rounded border border-border/60;
+}
+
+/* Coordinate display */
+.coordinate-display {
+  @apply font-mono text-xs bg-background/70 px-2 py-1 rounded-sm backdrop-blur-sm;
+}
+
+/* Layer controls */
+.layer-toggle {
+  @apply flex items-center gap-2 text-xs py-1;
+}
+
+/* Data table with geospatial focus */
+.geo-table {
+  @apply table-modern;
+}
+
+.geo-table th[data-type="spatial"] {
+  @apply bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-200;
+}
+
+.geo-table td[data-type="spatial"] {
+  @apply font-mono text-xs;
+}
+
+/* Precision measurement tools */
+.measurement-tool {
+  @apply flex items-center gap-2 bg-background/90 backdrop-blur-sm p-2 rounded-full shadow-md;
+}
+
+.measurement-value {
+  @apply font-mono text-xs font-semibold;
+}
+
+/* Mini-map / context map */
+.mini-map {
+  @apply h-24 w-24 rounded border-subtle bg-[var(--map-land)] overflow-hidden relative;
+  background-image: var(--topo-bg);
+}
+
+.mini-map-viewport {
+  @apply absolute border-2 border-primary/70 bg-primary/10;
+}
+
+/* Immersive property card with map context */
+.property-card {
+  @apply clean-panel overflow-hidden;
+}
+
+.property-map-preview {
+  @apply h-32 bg-[var(--map-land)] relative -mx-5 -mt-5 mb-4;
+  background-image: var(--topo-bg);
+}
+
+.property-badge {
+  @apply absolute bottom-2 left-2 text-xs px-2 py-0.5 rounded-sm font-medium bg-background/80 backdrop-blur-sm;
+}
+
+.property-details {
+  @apply grid grid-cols-2 gap-2 text-sm;
+}
+
+.property-detail-label {
+  @apply text-xs text-muted-foreground;
+}
+
+.property-detail-value {
+  @apply font-medium;
+}
+
+/* Dashboard with geospatial context */
+.geo-dashboard {
+  @apply grid grid-cols-1 md:grid-cols-3 gap-4 mb-6;
+}
+
+.geo-dashboard-map {
+  @apply md:col-span-2 clean-panel;
+}
+
+.geo-dashboard-stats {
+  @apply flex flex-col gap-4;
+}
+
+/* Modern, clean tab navigation for sections */
+.modern-tabs {
+  @apply flex gap-1 mb-6 border-b border-border overflow-auto pb-px;
+}
+
+.modern-tab {
+  @apply px-4 py-2 font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap;
+}
+
+.modern-tab.active {
+  @apply text-foreground border-b-2 border-primary;
+}
+
+/* Printing and export layout styles */
+.print-layout {
+  @apply max-w-3xl mx-auto p-8 bg-white text-black;
+}
+
+.print-header {
+  @apply border-b-2 border-slate-800 pb-4 mb-6 flex justify-between items-center;
+}
+
+.print-map {
+  @apply border border-black h-56 bg-[var(--map-land)] mb-6;
+  background-image: var(--topo-bg);
+}
+
+.print-grid {
+  @apply border border-collapse mb-6;
+}
+
+.print-grid th,
+.print-grid td {
+  @apply border border-slate-300 p-2 text-sm;
+}
+
+.print-grid th {
+  @apply bg-slate-100 font-medium;
+}
+
+.print-footer {
+  @apply text-xs text-slate-500 text-center border-t border-slate-200 pt-4 mt-8;
 }

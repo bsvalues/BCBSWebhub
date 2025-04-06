@@ -69,6 +69,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Get recent audits for GIS dashboard
+  app.get("/api/audits/recent", ensureAuthenticated, async (req, res) => {
+    try {
+      // Get all audits and sort by most recently updated
+      const allAudits = await storage.getAudits();
+      const sortedAudits = allAudits.sort((a, b) => {
+        const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return dateB - dateA;
+      });
+      
+      // Return the 10 most recent audits
+      res.json(sortedAudits.slice(0, 10));
+    } catch (error) {
+      handleApiError(res, error);
+    }
+  });
+  
   // Get all users (for assignment)
   app.get("/api/users", ensureAuthenticated, async (req, res) => {
     try {

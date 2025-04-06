@@ -9,6 +9,7 @@ import Analytics from "@/pages/analytics";
 import AuditHistory from "@/pages/audit-history";
 import StyleDemo from "@/pages/style-demo";
 import ModernStyleDemo from "@/pages/modern-style-demo";
+import GISDashboard from "@/pages/gis-dashboard";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import ConnectionAlert from "./components/connection-alert";
 import { Loader2 } from "lucide-react";
@@ -52,6 +53,7 @@ function AuthenticatedApp() {
             <Route path="/analytics" component={Analytics} />
             <Route path="/audit-history" component={AuditHistory} />
             <Route path="/modern-style-demo" component={ModernStyleDemo} />
+            <Route path="/gis-dashboard" component={GISDashboard} />
             <Route component={NotFound} />
           </Switch>
         </MainLayout>
@@ -60,6 +62,7 @@ function AuthenticatedApp() {
           <Route path="/auth" component={AuthPage} />
           <Route path="/style-demo" component={StyleDemo} />
           <Route path="/modern-style-demo" component={ModernStyleDemo} />
+          <Route path="/gis-dashboard" component={GISDashboard} />
           <Route>
             <Redirect to="/auth" />
           </Route>
