@@ -22,7 +22,12 @@ import {
   Map,
   FileSpreadsheet,
   Landmark,
-  ChevronRight
+  ChevronRight,
+  UserCircle2,
+  FileText,
+  LayoutDashboard,
+  DollarSign,
+  Search
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -104,45 +109,76 @@ export default function LandingPage() {
     <div className="min-h-screen flex flex-col bg-background">
       {/* Hero Section */}
       <header className="relative overflow-hidden">
-        {/* Background Pattern */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-background z-0">
-          <div className="absolute inset-0 opacity-20" 
-               style={{backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.12'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")"}}></div>
+        {/* Background Image - Agricultural Field (like Benton County website) */}
+        <div className="absolute inset-0 bg-[#34653f] z-0">
+          {/* We're using a background style to simulate the wheat field image from the Benton County site */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#34653f]/80 to-[#d4b254]/40 opacity-70"></div>
+          <div className="absolute inset-0 bg-cover bg-center opacity-50"
+               style={{
+                 backgroundImage: "linear-gradient(rgba(52, 101, 63, 0.4), rgba(212, 178, 84, 0.4)), url(\"data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%23d4b254' fill-opacity='0.4' fill-rule='evenodd'/%3E%3C/svg%3E\")",
+                 backgroundSize: "200px 200px"
+               }}
+          ></div>
         </div>
 
-        {/* Navigation */}
-        <nav className="relative z-10 container mx-auto px-6 py-4">
-          <div className="flex justify-between items-center">
-            {/* Logo */}
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 text-2xl font-bold text-primary">
-                <Landmark className="h-8 w-8" />
-                <span>County Audit Hub</span>
+        {/* Navigation - Benton County Style */}
+        <nav className="relative z-10">
+          {/* Top Navigation Bar - Dark Blue/Green */}
+          <div className="bg-[#163e4a]/90 text-white py-3 px-6">
+            <div className="container mx-auto flex justify-between items-center">
+              {/* Logo */}
+              <div className="flex items-center gap-3">
+                <div className="h-16 w-16 bg-white rounded-full p-1 flex items-center justify-center">
+                  <div className="text-[#34653f] text-xs font-bold flex flex-col items-center justify-center">
+                    <span className="text-sm">BENTON</span>
+                    <span className="text-[0.6rem]">COUNTY</span>
+                    <span className="text-[0.5rem]">WASHINGTON</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold">BENTON COUNTY</div>
+                  <div className="text-sm tracking-wide">ASSESSOR'S OFFICE | AUDIT HUB</div>
+                </div>
               </div>
-            </div>
 
-            {/* Nav Items - Desktop */}
-            <div className="hidden md:flex items-center gap-8">
-              <a href="#features" className="text-foreground/80 hover:text-primary transition-colors">Features</a>
-              <a href="#workflow" className="text-foreground/80 hover:text-primary transition-colors">Workflow</a>
-              <a href="#about" className="text-foreground/80 hover:text-primary transition-colors">About</a>
-              
-              {showLoginForm ? (
-                <Button variant="outline" onClick={() => setShowLoginForm(false)}>
-                  Hide Login
-                </Button>
-              ) : (
-                <Button onClick={() => setShowLoginForm(true)}>
-                  Sign In
-                </Button>
-              )}
-            </div>
+              {/* Desktop Nav Links */}
+              <div className="hidden md:flex items-center gap-6">
+                <a href="#features" className="text-white hover:text-[#d4b254] transition-colors">Services</a>
+                <a href="#workflow" className="text-white hover:text-[#d4b254] transition-colors">Departments</a>
+                <a href="#about" className="text-white hover:text-[#d4b254] transition-colors">Government</a>
+                
+                <div className="flex items-center">
+                  <Button 
+                    variant="ghost" 
+                    className="text-white bg-[#34653f]/50 hover:bg-[#34653f]"
+                    onClick={() => setShowLoginForm(!showLoginForm)}
+                  >
+                    <UserCircle2 className="mr-2 h-4 w-4" />
+                    {showLoginForm ? "Hide Login" : "Sign In"}
+                  </Button>
+                </div>
+                
+                <div className="bg-[#34653f]/60 rounded-full p-2">
+                  <Search className="h-5 w-5" />
+                </div>
+              </div>
 
-            {/* Mobile Menu Button */}
-            <div className="md:hidden">
-              <Button variant="ghost" size="sm" onClick={() => setShowLoginForm(!showLoginForm)}>
-                {showLoginForm ? "Hide Login" : "Sign In"}
-              </Button>
+              {/* Mobile Menu Button */}
+              <div className="md:hidden flex items-center gap-3">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-white hover:bg-[#34653f]/70"
+                  onClick={() => setShowLoginForm(!showLoginForm)}
+                >
+                  <UserCircle2 className="mr-2 h-4 w-4" />
+                  {showLoginForm ? "Hide" : "Sign In"}
+                </Button>
+                
+                <div className="bg-[#34653f]/60 rounded-full p-1.5">
+                  <Search className="h-4 w-4" />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -216,24 +252,44 @@ export default function LandingPage() {
           )}
         </nav>
 
-        {/* Hero Content */}
-        <div className="relative z-10 container mx-auto px-6 pt-8 pb-20 md:pt-16 md:pb-32">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-12 items-center">
-            <div className="md:col-span-7 text-center md:text-left">
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 text-foreground leading-tight">
-                Modern Property Assessment
-                <span className="text-primary block mt-2">Audit Management</span>
+        {/* Hero Content - Benton County Style */}
+        <div className="relative z-10 container mx-auto px-6 pt-8 pb-20 md:pt-8 md:pb-32">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-12 items-center mt-6">
+            {/* Main large title overlay - Benton County style */}
+            <div className="absolute w-full text-center top-32 left-0 right-0 z-0 pointer-events-none hidden md:block">
+              <h1 className="text-8xl font-extrabold tracking-wider text-white/10 uppercase">
+                BENTON COUNTY
               </h1>
-              <p className="text-xl text-muted-foreground mb-8 max-w-xl mx-auto md:mx-0">
-                Streamline your county assessment workflows with advanced collaboration and analytics tools. Designed for county assessors.
+              <h2 className="text-6xl font-extrabold tracking-wider text-white/10 uppercase">
+                WASHINGTON
+              </h2>
+            </div>
+            
+            <div className="md:col-span-7 text-center md:text-left relative z-10">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 text-white leading-tight uppercase">
+                Property Assessment
+                <span className="text-[#d4b254] block mt-1">Audit System</span>
+              </h1>
+              <p className="text-xl text-white/80 mb-8 max-w-xl mx-auto md:mx-0">
+                Streamline county assessment workflows with advanced collaboration, 
+                geospatial integration, and analytics tools.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
-                <Button size="lg" className="text-md btn-depth" onClick={() => setShowLoginForm(true)}>
-                  <span>Get Started</span>
-                  <ArrowRight className="ml-2 h-5 w-5" />
+                <Button 
+                  size="lg" 
+                  className="text-md bg-[#d4b254] text-[#163e4a] hover:bg-[#e0c97f] border-0" 
+                  onClick={() => setShowLoginForm(true)}
+                >
+                  <span>Sign In</span>
+                  <UserCircle2 className="ml-2 h-5 w-5" />
                 </Button>
-                <Button size="lg" variant="outline" className="text-md" asChild>
-                  <a href="#features">Learn More</a>
+                <Button 
+                  size="lg" 
+                  variant="outline" 
+                  className="text-md text-white border-white hover:bg-white/20 hover:text-white" 
+                  asChild
+                >
+                  <a href="#features">Explore Features</a>
                 </Button>
               </div>
             </div>
@@ -320,11 +376,55 @@ export default function LandingPage() {
         }}></div>
       </header>
 
+      {/* Quick Access Buttons - Benton County Style */}
+      <section className="bg-white py-0 -mt-8 relative z-20">
+        <div className="container mx-auto">
+          <div className="flex flex-wrap justify-center gap-4 md:gap-0">
+            {[
+              { 
+                title: "Elected Officials", 
+                icon: <UserCircle2 className="h-6 w-6" />,
+                color: "#2b5e71"
+              },
+              { 
+                title: "Audit Code",
+                icon: <FileText className="h-6 w-6" />,
+                color: "#4CAF50"
+              },
+              { 
+                title: "Meeting Agendas", 
+                icon: <LayoutDashboard className="h-6 w-6" />,
+                color: "#2b5e71"
+              },
+              { 
+                title: "Job Openings", 
+                icon: <Building className="h-6 w-6" />,
+                color: "#F9A825"
+              },
+              { 
+                title: "Budget Documents", 
+                icon: <DollarSign className="h-6 w-6" />,
+                color: "#00BCD4"
+              }
+            ].map((item, index) => (
+              <div key={index} className="w-40 flex flex-col items-center cursor-pointer">
+                <div className="w-16 h-16 md:w-20 md:h-20 rounded-md flex items-center justify-center mb-2" style={{ backgroundColor: item.color }}>
+                  <div className="text-white">
+                    {item.icon}
+                  </div>
+                </div>
+                <span className="text-center text-sm font-medium">{item.title}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+      
       {/* Features Section */}
       <section id="features" className="py-20 bg-background">
         <div className="container mx-auto px-6">
           <div className="text-center mb-16">
-            <div className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
+            <div className="inline-block px-3 py-1 rounded-full bg-[#34653f]/10 text-[#34653f] text-sm font-medium mb-4">
               Features
             </div>
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Comprehensive Audit Management</h2>
@@ -336,7 +436,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {features.map((feature, index) => (
               <div key={index} className="p-6 rounded-lg border border-border bg-card hover:bg-card/80 transition-colors">
-                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                <div className="w-12 h-12 rounded-lg bg-[#34653f]/10 flex items-center justify-center mb-4">
                   {feature.icon}
                 </div>
                 <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
