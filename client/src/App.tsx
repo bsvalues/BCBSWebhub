@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import NotFound from "@/pages/not-found";
-import AuthPage from "@/pages/auth-page";
+import LandingPage from "@/pages/landing-page";
 import Dashboard from "@/pages/dashboard";
 import AuditQueue from "@/pages/audit-queue";
 import CreateAudit from "@/pages/create-audit";
@@ -24,9 +24,9 @@ function AuthenticatedApp() {
   useEffect(() => {
     if (auth.isLoading) return; // Skip navigation logic during loading
     
-    if (!auth.user && location !== "/auth") {
-      navigate("/auth");
-    } else if (auth.user && location === "/auth") {
+    // Only redirect to protected routes when user is not authenticated
+    if (!auth.user && 
+      !["/", "/auth", "/style-demo", "/modern-style-demo", "/gis-dashboard"].includes(location)) {
       navigate("/");
     }
   }, [auth.user, auth.isLoading, location, navigate]);
@@ -59,13 +59,11 @@ function AuthenticatedApp() {
         </MainLayout>
       ) : (
         <Switch>
-          <Route path="/auth" component={AuthPage} />
+          <Route path="/" component={LandingPage} />
           <Route path="/style-demo" component={StyleDemo} />
           <Route path="/modern-style-demo" component={ModernStyleDemo} />
           <Route path="/gis-dashboard" component={GISDashboard} />
-          <Route>
-            <Redirect to="/auth" />
-          </Route>
+          <Route component={LandingPage} />
         </Switch>
       )}
     </>

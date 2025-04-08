@@ -1,0 +1,566 @@
+import { useState, useEffect } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import { useLocation } from "wouter";
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
+import { 
+  Loader2, 
+  MapPin, 
+  BarChart3, 
+  Check, 
+  CheckCircle, 
+  ClipboardList, 
+  Building, 
+  Home, 
+  ArrowRight, 
+  Building2, 
+  Map,
+  FileSpreadsheet,
+  Landmark,
+  ChevronRight
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+
+// Login schema
+const loginSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
+
+export default function LandingPage() {
+  const [location, navigate] = useLocation();
+  const auth = useAuth();
+  const [showLoginForm, setShowLoginForm] = useState(false);
+
+  // Effect to redirect authenticated users
+  useEffect(() => {
+    if (auth.user) {
+      navigate("/");
+    }
+  }, [auth.user, navigate]);
+
+  // Login form
+  const loginForm = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      username: "",
+      password: "",
+    },
+  });
+
+  // Handle login submission
+  const onLoginSubmit = (data: LoginFormValues) => {
+    auth.loginMutation.mutate(data, {
+      onSuccess: () => {
+        navigate("/");
+      },
+    });
+  };
+
+  // Features section data
+  const features = [
+    {
+      icon: <CheckCircle className="h-6 w-6 text-primary" />,
+      title: "Streamlined Auditing",
+      description: "Accelerate assessment reviews with an intuitive workflow system"
+    },
+    {
+      icon: <BarChart3 className="h-6 w-6 text-primary" />,
+      title: "Advanced Analytics",
+      description: "Gain insights with comprehensive reporting and data visualization"
+    },
+    {
+      icon: <Map className="h-6 w-6 text-primary" />,
+      title: "Geospatial Integration",
+      description: "Visualize property data with interactive mapping capabilities"
+    },
+    {
+      icon: <Building2 className="h-6 w-6 text-primary" />,
+      title: "Property Management",
+      description: "Track property assessments and tax impact with detailed records"
+    }
+  ];
+
+  // Show loading state while checking authentication
+  if (auth.isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+          <p className="text-foreground font-medium">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      {/* Hero Section */}
+      <header className="relative overflow-hidden">
+        {/* Background Pattern */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-background z-0">
+          <div className="absolute inset-0 opacity-20" 
+               style={{backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.12'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")"}}></div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="relative z-10 container mx-auto px-6 py-4">
+          <div className="flex justify-between items-center">
+            {/* Logo */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 text-2xl font-bold text-primary">
+                <Landmark className="h-8 w-8" />
+                <span>County Audit Hub</span>
+              </div>
+            </div>
+
+            {/* Nav Items - Desktop */}
+            <div className="hidden md:flex items-center gap-8">
+              <a href="#features" className="text-foreground/80 hover:text-primary transition-colors">Features</a>
+              <a href="#workflow" className="text-foreground/80 hover:text-primary transition-colors">Workflow</a>
+              <a href="#about" className="text-foreground/80 hover:text-primary transition-colors">About</a>
+              
+              {showLoginForm ? (
+                <Button variant="outline" onClick={() => setShowLoginForm(false)}>
+                  Hide Login
+                </Button>
+              ) : (
+                <Button onClick={() => setShowLoginForm(true)}>
+                  Sign In
+                </Button>
+              )}
+            </div>
+
+            {/* Mobile Menu Button */}
+            <div className="md:hidden">
+              <Button variant="ghost" size="sm" onClick={() => setShowLoginForm(!showLoginForm)}>
+                {showLoginForm ? "Hide Login" : "Sign In"}
+              </Button>
+            </div>
+          </div>
+
+          {/* Login Form Overlay */}
+          {showLoginForm && (
+            <div className="absolute right-6 top-20 z-50 w-full max-w-sm md:w-96 shadow-lg rounded-lg animate-in fade-in slide-in-from-top-5 duration-300">
+              <Card>
+                <CardContent className="pt-6 pb-6">
+                  <div className="text-center mb-6">
+                    <h3 className="text-lg font-semibold mb-2">Welcome Back</h3>
+                    <p className="text-sm text-muted-foreground">Sign in to access your dashboard</p>
+                  </div>
+                  
+                  <Form {...loginForm}>
+                    <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
+                      <FormField
+                        control={loginForm.control}
+                        name="username"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input placeholder="Username" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={loginForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input type="password" placeholder="Password" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <Button 
+                        type="submit" 
+                        className="w-full btn-depth" 
+                        disabled={auth.loginMutation.isPending}
+                      >
+                        {auth.loginMutation.isPending ? (
+                          <span className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Signing in...
+                          </span>
+                        ) : "Sign In"}
+                      </Button>
+                    </form>
+                  </Form>
+                  
+                  <div className="mt-6 pt-4 border-t border-border/30">
+                    <p className="text-xs text-muted-foreground mb-2">Test credentials available:</p>
+                    <div className="grid grid-cols-2 text-xs border border-border/40 rounded-md overflow-hidden">
+                      <div className="px-2 py-1 font-medium bg-muted/20 border-r border-border/40">Username</div>
+                      <div className="px-2 py-1 font-medium bg-muted/20">Password</div>
+                      <div className="px-2 py-1 border-r border-t border-border/40">admin</div>
+                      <div className="px-2 py-1 border-t border-border/40">password123</div>
+                      <div className="px-2 py-1 border-r border-t border-border/40">auditor</div>
+                      <div className="px-2 py-1 border-t border-border/40">password123</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </nav>
+
+        {/* Hero Content */}
+        <div className="relative z-10 container mx-auto px-6 pt-8 pb-20 md:pt-16 md:pb-32">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-12 items-center">
+            <div className="md:col-span-7 text-center md:text-left">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 text-foreground leading-tight">
+                Modern Property Assessment
+                <span className="text-primary block mt-2">Audit Management</span>
+              </h1>
+              <p className="text-xl text-muted-foreground mb-8 max-w-xl mx-auto md:mx-0">
+                Streamline your county assessment workflows with advanced collaboration and analytics tools. Designed for county assessors.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
+                <Button size="lg" className="text-md btn-depth" onClick={() => setShowLoginForm(true)}>
+                  <span>Get Started</span>
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+                <Button size="lg" variant="outline" className="text-md" asChild>
+                  <a href="#features">Learn More</a>
+                </Button>
+              </div>
+            </div>
+            <div className="md:col-span-5 relative">
+              <div className="relative z-10 p-2 rounded-lg bg-gradient-to-br from-background to-muted/40 border border-border/40 shadow-xl">
+                <div className="rounded-md overflow-hidden border border-border/20">
+                  <div className="aspect-[16/9] bg-muted/80 relative">
+                    <div className="absolute inset-0 flex flex-col">
+                      {/* Mock GIS Dashboard */}
+                      <div className="h-10 bg-primary/10 flex items-center px-3 border-b border-border/20">
+                        <div className="w-3 h-3 rounded-full bg-red-400 mr-2"></div>
+                        <div className="w-3 h-3 rounded-full bg-yellow-400 mr-2"></div>
+                        <div className="w-3 h-3 rounded-full bg-green-400 mr-2"></div>
+                        <div className="flex-1"></div>
+                        <div className="text-xs text-foreground/60">County Audit Hub - GIS Dashboard</div>
+                      </div>
+                      <div className="flex-1 grid grid-cols-3">
+                        {/* Left Panel */}
+                        <div className="col-span-1 bg-card border-r border-border/20 p-2">
+                          <div className="w-full h-5 bg-muted/60 rounded-sm mb-2"></div>
+                          <div className="w-full h-5 bg-muted/60 rounded-sm mb-2"></div>
+                          <div className="w-3/4 h-5 bg-muted/60 rounded-sm mb-4"></div>
+                          
+                          <div className="bg-background/60 p-2 rounded-sm mb-2">
+                            <div className="w-full h-3 bg-muted/60 rounded-sm mb-1"></div>
+                            <div className="w-3/4 h-3 bg-muted/60 rounded-sm"></div>
+                          </div>
+                          
+                          <div className="bg-background/60 p-2 rounded-sm mb-2">
+                            <div className="w-full h-3 bg-muted/60 rounded-sm mb-1"></div>
+                            <div className="w-3/4 h-3 bg-muted/60 rounded-sm"></div>
+                          </div>
+                          
+                          <div className="bg-primary/20 p-2 rounded-sm">
+                            <div className="w-full h-3 bg-muted/60 rounded-sm mb-1"></div>
+                            <div className="w-3/4 h-3 bg-muted/60 rounded-sm"></div>
+                          </div>
+                        </div>
+                        
+                        {/* Map Area */}
+                        <div className="col-span-2 relative">
+                          <div className="absolute inset-0 bg-blue-100 opacity-30"></div>
+                          <div className="absolute inset-0" style={{ 
+                            backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%23000000' fill-opacity='0.05' fill-rule='evenodd'/%3E%3C/svg%3E")`,
+                            backgroundSize: "80px 80px",
+                          }}></div>
+                          
+                          {/* Property Markers */}
+                          <div className="absolute left-1/4 top-1/3 w-5 h-5 bg-primary/80 rounded-full shadow-md flex items-center justify-center">
+                            <Building className="w-3 h-3 text-white" />
+                          </div>
+                          
+                          <div className="absolute left-2/3 top-1/2 w-5 h-5 bg-primary/80 rounded-full shadow-md flex items-center justify-center">
+                            <Home className="w-3 h-3 text-white" />
+                          </div>
+                          
+                          <div className="absolute left-1/2 top-2/3 w-5 h-5 bg-yellow-500/80 rounded-full shadow-md flex items-center justify-center">
+                            <MapPin className="w-3 h-3 text-white" />
+                          </div>
+                          
+                          {/* Controls */}
+                          <div className="absolute top-2 right-2 bg-card/80 backdrop-blur-sm p-1 rounded-md shadow-sm border border-border/20 flex flex-col gap-1">
+                            <div className="w-6 h-6 bg-background/80 rounded-sm flex items-center justify-center text-foreground/60">+</div>
+                            <div className="w-6 h-6 bg-background/80 rounded-sm flex items-center justify-center text-foreground/60">−</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Decorative elements */}
+                <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-primary/10 rounded-lg -z-10"></div>
+                <div className="absolute -top-4 -left-4 w-16 h-16 bg-primary/10 rounded-lg -z-10"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Curved bottom edge */}
+        <div className="absolute -bottom-1 left-0 right-0 h-8 bg-background" style={{ 
+          borderTopLeftRadius: "50% 100%", 
+          borderTopRightRadius: "50% 100%" 
+        }}></div>
+      </header>
+
+      {/* Features Section */}
+      <section id="features" className="py-20 bg-background">
+        <div className="container mx-auto px-6">
+          <div className="text-center mb-16">
+            <div className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
+              Features
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Comprehensive Audit Management</h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Our platform offers a complete solution for county assessors to manage property audits efficiently
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {features.map((feature, index) => (
+              <div key={index} className="p-6 rounded-lg border border-border bg-card hover:bg-card/80 transition-colors">
+                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                  {feature.icon}
+                </div>
+                <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
+                <p className="text-muted-foreground">{feature.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Workflow Section */}
+      <section id="workflow" className="py-20 bg-muted/10">
+        <div className="container mx-auto px-6">
+          <div className="text-center mb-16">
+            <div className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
+              Workflow
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Streamlined Assessment Process</h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              From submission to approval, our workflow system guides you through each step
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
+            <div>
+              <div className="space-y-8">
+                {[
+                  { 
+                    title: "Audit Creation", 
+                    description: "Submit new assessment review requests with all relevant property details",
+                    icon: <FileSpreadsheet className="h-5 w-5" />
+                  },
+                  { 
+                    title: "Initial Review", 
+                    description: "Auditors perform initial assessment and gather supporting documentation",
+                    icon: <ClipboardList className="h-5 w-5" />
+                  },
+                  { 
+                    title: "Supervisor Approval", 
+                    description: "Management review ensures accuracy and compliance with regulations",
+                    icon: <CheckCircle className="h-5 w-5" />
+                  },
+                  { 
+                    title: "Final Documentation", 
+                    description: "Generate final reports with comprehensive audit trail and history",
+                    icon: <BarChart3 className="h-5 w-5" />
+                  }
+                ].map((step, index) => (
+                  <div key={index} className="flex gap-4 group">
+                    <div className="w-12 h-12 rounded-full border-2 border-primary bg-primary/10 flex-shrink-0 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      {step.icon}
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-semibold flex items-center gap-2">
+                        {step.title}
+                        <ChevronRight className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </h3>
+                      <p className="text-muted-foreground mt-2">{step.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div className="relative">
+              <div className="relative bg-card rounded-lg border border-border/50 shadow-xl p-6">
+                <div className="absolute -top-3 -left-3 bg-primary/10 w-full h-full rounded-lg -z-10"></div>
+                
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between mb-8">
+                    <h3 className="text-xl font-semibold">Audit Queue</h3>
+                    <div className="flex items-center gap-2">
+                      <div className="px-2 py-1 bg-primary/10 text-primary text-xs font-medium rounded-full">
+                        12 Pending
+                      </div>
+                      <div className="px-2 py-1 bg-yellow-500/10 text-yellow-500 text-xs font-medium rounded-full">
+                        5 Urgent
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {[
+                    { 
+                      title: "Residential Property Assessment", 
+                      id: "A-1001", 
+                      status: "In Progress",
+                      statusColor: "bg-blue-500/20 text-blue-500",
+                      address: "123 Main St, County Seat"
+                    },
+                    { 
+                      title: "Commercial Building Valuation", 
+                      id: "A-1002", 
+                      status: "Needs Info", 
+                      statusColor: "bg-yellow-500/20 text-yellow-500",
+                      address: "555 Business Ave, County Seat"
+                    },
+                    { 
+                      title: "Agricultural Land Review", 
+                      id: "A-1003", 
+                      status: "Pending", 
+                      statusColor: "bg-primary/20 text-primary",
+                      address: "Rural Route 5, County Seat"
+                    }
+                  ].map((audit, index) => (
+                    <div key={index} className="p-4 rounded-lg border border-border/50 bg-background hover:bg-muted/10 cursor-pointer transition-colors group">
+                      <div className="flex justify-between mb-2">
+                        <span className="font-medium">{audit.title}</span>
+                        <span className="text-xs text-muted-foreground">{audit.id}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center text-sm text-muted-foreground">
+                          <MapPin className="h-3 w-3 mr-1" />
+                          {audit.address}
+                        </div>
+                        <div className={cn("px-2 py-0.5 rounded-full text-xs font-medium", audit.statusColor)}>
+                          {audit.status}
+                        </div>
+                      </div>
+                      <div className="mt-2 pt-2 border-t border-border/30 flex justify-between items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="text-xs text-muted-foreground">Assigned to: Jane Smith</span>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs">
+                          View Details
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* About Section */}
+      <section id="about" className="py-20 bg-background">
+        <div className="container mx-auto px-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+            <div>
+              <div className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
+                About
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold mb-6">Built for County Assessors</h2>
+              <p className="text-lg text-muted-foreground mb-6">
+                County Audit Hub was developed specifically for the needs of county assessment departments, with input from experienced assessors and supervisors.
+              </p>
+              <div className="space-y-4">
+                {[
+                  "Secure, web-based platform with role-based access control",
+                  "Real-time collaboration between assessors and supervisors",
+                  "Comprehensive audit trails for all assessment activities",
+                  "Detailed reporting and analytics capabilities"
+                ].map((feature, index) => (
+                  <div key={index} className="flex items-start gap-3">
+                    <div className="mt-1 w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                      <Check className="h-3 w-3 text-primary" />
+                    </div>
+                    <p className="text-foreground/80">{feature}</p>
+                  </div>
+                ))}
+              </div>
+              <Button className="mt-8 btn-depth" onClick={() => setShowLoginForm(true)}>
+                Access Dashboard
+              </Button>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 relative">
+              <div className="absolute -z-10 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3/4 h-3/4 bg-primary/5 rounded-full blur-xl"></div>
+              
+              <div className="col-span-2 sm:col-span-1 bg-card shadow-md rounded-lg border border-border/40 p-5 transform hover:-translate-y-1 transition-transform">
+                <BarChart3 className="h-10 w-10 text-primary mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Performance Metrics</h3>
+                <p className="text-sm text-muted-foreground">Track assessment volume, approval rates, and processing times</p>
+              </div>
+              
+              <div className="col-span-2 sm:col-span-1 bg-card shadow-md rounded-lg border border-border/40 p-5 transform hover:-translate-y-1 transition-transform sm:translate-y-6">
+                <Map className="h-10 w-10 text-primary mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Geospatial Analysis</h3>
+                <p className="text-sm text-muted-foreground">Visualize assessment distribution across the county</p>
+              </div>
+              
+              <div className="col-span-2 sm:col-span-1 bg-card shadow-md rounded-lg border border-border/40 p-5 transform hover:-translate-y-1 transition-transform">
+                <FileSpreadsheet className="h-10 w-10 text-primary mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Comprehensive Reports</h3>
+                <p className="text-sm text-muted-foreground">Generate detailed reports for county stakeholders</p>
+              </div>
+              
+              <div className="col-span-2 sm:col-span-1 bg-card shadow-md rounded-lg border border-border/40 p-5 transform hover:-translate-y-1 transition-transform sm:translate-y-6">
+                <Building className="h-10 w-10 text-primary mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Property Portfolio</h3>
+                <p className="text-sm text-muted-foreground">Manage all property types in a unified system</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="py-12 bg-muted/10 border-t border-border/20">
+        <div className="container mx-auto px-6">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <div className="flex items-center gap-2 mb-6 md:mb-0">
+              <Landmark className="h-6 w-6 text-primary" />
+              <span className="text-xl font-bold">County Audit Hub</span>
+            </div>
+            
+            <div className="flex flex-col md:flex-row items-center gap-6 text-muted-foreground">
+              <a href="#features" className="hover:text-primary transition-colors">Features</a>
+              <a href="#workflow" className="hover:text-primary transition-colors">Workflow</a>
+              <a href="#about" className="hover:text-primary transition-colors">About</a>
+              <Button variant="outline" onClick={() => setShowLoginForm(true)}>Sign In</Button>
+            </div>
+          </div>
+          
+          <div className="mt-8 pt-8 border-t border-border/20 flex flex-col md:flex-row justify-between items-center">
+            <p className="text-sm text-muted-foreground mb-4 md:mb-0">
+              © {new Date().getFullYear()} Benton County Assessor's Office. All rights reserved.
+            </p>
+            <div className="flex gap-4">
+              <span className="text-sm text-muted-foreground">Privacy Policy</span>
+              <span className="text-sm text-muted-foreground">Terms of Service</span>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}

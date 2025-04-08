@@ -110,6 +110,9 @@
       0px 8.6px 17.2px -1.2px hsl(var(--shadow-color) / 0.08),
       0px 13.8px 27.6px -1.5px hsl(var(--shadow-color) / 0.08),
       0px 21px 42px -1.8px hsl(var(--shadow-color) / 0.08);
+      
+    /* Smooth scroll behavior for landing page */
+    scroll-behavior: smooth;
     
     /* Topographic-inspired patterns - mimics contour lines */
     --topo-bg: repeating-linear-gradient(
@@ -302,6 +305,48 @@
 /* County Audit Hub brand styles */
 .countyaudit-brand {
   @apply font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/70;
+}
+
+/* Landing page styles */
+.landing-page-hero {
+  @apply relative overflow-hidden;
+  background: radial-gradient(circle at 80% 30%, hsl(var(--primary) / 0.08), transparent 50%);
+}
+
+.landing-page-section {
+  @apply py-20;
+}
+
+.landing-page-feature-card {
+  @apply p-6 rounded-lg border border-border bg-card transition-colors hover:bg-card/80;
+  transition: transform 0.3s var(--ease-out-expo), box-shadow 0.3s var(--ease-out-expo);
+}
+
+.landing-page-feature-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-elevation-medium);
+}
+
+.landing-page-workflow-step {
+  @apply flex gap-4 items-start;
+  transition: transform 0.2s var(--ease-out-expo);
+}
+
+.landing-page-workflow-step:hover {
+  transform: translateX(5px);
+}
+
+.landing-page-mockup {
+  @apply relative overflow-hidden shadow-lg rounded-lg;
+  box-shadow: 
+    0 5px 15px rgba(0, 0, 0, 0.1),
+    0 15px 35px rgba(0, 0, 0, 0.05);
+  transform: perspective(1000px) rotateY(-5deg) rotateX(5deg);
+  transition: transform 0.5s var(--ease-out-expo);
+}
+
+.landing-page-mockup:hover {
+  transform: perspective(1000px) rotateY(0deg) rotateX(0deg);
 }
 
 /* Depth effects for cards and containers */
