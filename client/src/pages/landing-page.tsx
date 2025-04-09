@@ -121,61 +121,62 @@ export default function LandingPage() {
           ></div>
         </div>
 
-        {/* Navigation - Benton County Style */}
+        {/* Navigation - Benton County Style from Brand Guide */}
         <nav className="relative z-10">
           {/* Top Navigation Bar - Dark Blue/Green */}
-          <div className="bg-[#163e4a]/90 text-white py-3 px-6">
+          <div className="benton-nav py-3 px-6">
             <div className="container mx-auto flex justify-between items-center">
-              {/* Logo */}
+              {/* Logo - Official Seal Signature */}
               <div className="flex items-center gap-3">
-                <div className="h-16 w-16 bg-white rounded-full p-1 flex items-center justify-center">
-                  <div className="text-[#34653f] text-xs font-bold flex flex-col items-center justify-center">
-                    <span className="text-sm">BENTON</span>
-                    <span className="text-[0.6rem]">COUNTY</span>
-                    <span className="text-[0.5rem]">WASHINGTON</span>
+                <div className="h-16 w-16 benton-logo">
+                  <div className="benton-text-green text-xs font-bold flex flex-col items-center justify-center">
+                    <span className="text-sm benton-heading">COUNTY OF</span>
+                    <span className="text-base benton-heading">BENTON</span>
+                    <span className="text-[0.5rem] benton-heading">WASHINGTON</span>
+                    <span className="text-[0.5rem] benton-heading">EST. 1905</span>
                   </div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold">BENTON COUNTY</div>
-                  <div className="text-sm tracking-wide">ASSESSOR'S OFFICE | AUDIT HUB</div>
+                  <div className="text-2xl font-bold benton-heading">BENTON COUNTY</div>
+                  <div className="text-sm tracking-wide benton-body">ASSESSOR'S OFFICE | AUDIT HUB</div>
                 </div>
               </div>
 
-              {/* Desktop Nav Links */}
+              {/* Desktop Nav Links - Official Benton County style */}
               <div className="hidden md:flex items-center gap-6">
-                <a href="#features" className="text-white hover:text-[#d4b254] transition-colors">Services</a>
-                <a href="#workflow" className="text-white hover:text-[#d4b254] transition-colors">Departments</a>
-                <a href="#about" className="text-white hover:text-[#d4b254] transition-colors">Government</a>
+                <a href="#features" className="text-white hover:benton-text-sand transition-colors benton-body">Services</a>
+                <a href="#workflow" className="text-white hover:benton-text-sand transition-colors benton-body">Departments</a>
+                <a href="#about" className="text-white hover:benton-text-sand transition-colors benton-body">Government</a>
                 
                 <div className="flex items-center">
                   <Button 
                     variant="ghost" 
-                    className="text-white bg-[#34653f]/50 hover:bg-[#34653f]"
+                    className="text-white benton-bg-green/50 hover:benton-bg-green"
                     onClick={() => setShowLoginForm(!showLoginForm)}
                   >
                     <UserCircle2 className="mr-2 h-4 w-4" />
-                    {showLoginForm ? "Hide Login" : "Sign In"}
+                    <span className="benton-body">{showLoginForm ? "Hide Login" : "Sign In"}</span>
                   </Button>
                 </div>
                 
-                <div className="bg-[#34653f]/60 rounded-full p-2">
+                <div className="benton-bg-green/60 rounded-full p-2">
                   <Search className="h-5 w-5" />
                 </div>
               </div>
 
-              {/* Mobile Menu Button */}
+              {/* Mobile Menu Button - Benton County style */}
               <div className="md:hidden flex items-center gap-3">
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  className="text-white hover:bg-[#34653f]/70"
+                  className="text-white hover:benton-bg-green/70"
                   onClick={() => setShowLoginForm(!showLoginForm)}
                 >
                   <UserCircle2 className="mr-2 h-4 w-4" />
-                  {showLoginForm ? "Hide" : "Sign In"}
+                  <span className="benton-body">{showLoginForm ? "Hide" : "Sign In"}</span>
                 </Button>
                 
-                <div className="bg-[#34653f]/60 rounded-full p-1.5">
+                <div className="benton-bg-green/60 rounded-full p-1.5">
                   <Search className="h-4 w-4" />
                 </div>
               </div>
@@ -277,7 +278,7 @@ export default function LandingPage() {
               <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
                 <Button 
                   size="lg" 
-                  className="text-md bg-[#d4b254] text-[#163e4a] hover:bg-[#e0c97f] border-0" 
+                  className="text-md benton-bg-sand benton-text-blue hover:benton-bg-light-sand border-0 benton-heading" 
                   onClick={() => setShowLoginForm(true)}
                 >
                   <span>Sign In</span>
@@ -286,7 +287,7 @@ export default function LandingPage() {
                 <Button 
                   size="lg" 
                   variant="outline" 
-                  className="text-md text-white border-white hover:bg-white/20 hover:text-white" 
+                  className="text-md text-white border-white hover:bg-white/20 hover:text-white benton-body" 
                   asChild
                 >
                   <a href="#features">Explore Features</a>
@@ -384,27 +385,27 @@ export default function LandingPage() {
               { 
                 title: "Elected Officials", 
                 icon: <UserCircle2 className="h-6 w-6" />,
-                color: "#2b5e71"
+                color: "var(--benton-blue)"
               },
               { 
                 title: "Audit Code",
                 icon: <FileText className="h-6 w-6" />,
-                color: "#4CAF50"
+                color: "var(--benton-green)"
               },
               { 
                 title: "Meeting Agendas", 
                 icon: <LayoutDashboard className="h-6 w-6" />,
-                color: "#2b5e71"
+                color: "var(--benton-blue)"
               },
               { 
                 title: "Job Openings", 
                 icon: <Building className="h-6 w-6" />,
-                color: "#F9A825"
+                color: "var(--benton-sand)"
               },
               { 
                 title: "Budget Documents", 
                 icon: <DollarSign className="h-6 w-6" />,
-                color: "#00BCD4"
+                color: "var(--benton-light-green)"
               }
             ].map((item, index) => (
               <div key={index} className="w-40 flex flex-col items-center cursor-pointer">
@@ -424,11 +425,11 @@ export default function LandingPage() {
       <section id="features" className="py-20 bg-background">
         <div className="container mx-auto px-6">
           <div className="text-center mb-16">
-            <div className="inline-block px-3 py-1 rounded-full bg-[#34653f]/10 text-[#34653f] text-sm font-medium mb-4">
+            <div className="inline-block px-3 py-1 rounded-full benton-bg-green/10 benton-text-green text-sm font-medium mb-4 benton-body">
               Features
             </div>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Comprehensive Audit Management</h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4 benton-heading">Comprehensive Audit Management</h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto benton-body">
               Our platform offers a complete solution for county assessors to manage property audits efficiently
             </p>
           </div>
@@ -436,11 +437,11 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {features.map((feature, index) => (
               <div key={index} className="p-6 rounded-lg border border-border bg-card hover:bg-card/80 transition-colors">
-                <div className="w-12 h-12 rounded-lg bg-[#34653f]/10 flex items-center justify-center mb-4">
-                  {feature.icon}
+                <div className="w-12 h-12 rounded-lg benton-bg-green/10 flex items-center justify-center mb-4">
+                  <div className="benton-text-green">{feature.icon}</div>
                 </div>
-                <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
-                <p className="text-muted-foreground">{feature.description}</p>
+                <h3 className="text-xl font-semibold mb-2 benton-heading">{feature.title}</h3>
+                <p className="text-muted-foreground benton-body">{feature.description}</p>
               </div>
             ))}
           </div>
@@ -451,11 +452,11 @@ export default function LandingPage() {
       <section id="workflow" className="py-20 bg-muted/10">
         <div className="container mx-auto px-6">
           <div className="text-center mb-16">
-            <div className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
+            <div className="inline-block px-3 py-1 rounded-full benton-bg-blue/10 benton-text-blue text-sm font-medium mb-4 benton-body">
               Workflow
             </div>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Streamlined Assessment Process</h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4 benton-heading">Streamlined Assessment Process</h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto benton-body">
               From submission to approval, our workflow system guides you through each step
             </p>
           </div>
@@ -486,15 +487,15 @@ export default function LandingPage() {
                   }
                 ].map((step, index) => (
                   <div key={index} className="flex gap-4 group">
-                    <div className="w-12 h-12 rounded-full border-2 border-primary bg-primary/10 flex-shrink-0 flex items-center justify-center group-hover:scale-110 transition-transform">
-                      {step.icon}
+                    <div className="w-12 h-12 rounded-full border-2 border-benton-blue benton-bg-blue/10 flex-shrink-0 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <div className="benton-text-blue">{step.icon}</div>
                     </div>
                     <div>
-                      <h3 className="text-xl font-semibold flex items-center gap-2">
+                      <h3 className="text-xl font-semibold flex items-center gap-2 benton-heading">
                         {step.title}
-                        <ChevronRight className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ChevronRight className="h-4 w-4 benton-text-blue opacity-0 group-hover:opacity-100 transition-opacity" />
                       </h3>
-                      <p className="text-muted-foreground mt-2">{step.description}</p>
+                      <p className="text-muted-foreground mt-2 benton-body">{step.description}</p>
                     </div>
                   </div>
                 ))}
@@ -507,12 +508,12 @@ export default function LandingPage() {
                 
                 <div className="space-y-5">
                   <div className="flex items-center justify-between mb-8">
-                    <h3 className="text-xl font-semibold">Audit Queue</h3>
+                    <h3 className="text-xl font-semibold benton-heading">Audit Queue</h3>
                     <div className="flex items-center gap-2">
-                      <div className="px-2 py-1 bg-primary/10 text-primary text-xs font-medium rounded-full">
+                      <div className="px-2 py-1 benton-bg-blue/10 benton-text-blue text-xs font-medium rounded-full benton-body">
                         12 Pending
                       </div>
-                      <div className="px-2 py-1 bg-yellow-500/10 text-yellow-500 text-xs font-medium rounded-full">
+                      <div className="px-2 py-1 benton-bg-sand/10 benton-text-sand text-xs font-medium rounded-full benton-body">
                         5 Urgent
                       </div>
                     </div>
@@ -523,21 +524,21 @@ export default function LandingPage() {
                       title: "Residential Property Assessment", 
                       id: "A-1001", 
                       status: "In Progress",
-                      statusColor: "bg-blue-500/20 text-blue-500",
+                      statusColor: "benton-bg-blue/20 benton-text-blue",
                       address: "123 Main St, County Seat"
                     },
                     { 
                       title: "Commercial Building Valuation", 
                       id: "A-1002", 
                       status: "Needs Info", 
-                      statusColor: "bg-yellow-500/20 text-yellow-500",
+                      statusColor: "benton-bg-sand/20 benton-text-sand",
                       address: "555 Business Ave, County Seat"
                     },
                     { 
                       title: "Agricultural Land Review", 
                       id: "A-1003", 
                       status: "Pending", 
-                      statusColor: "bg-primary/20 text-primary",
+                      statusColor: "benton-bg-green/20 benton-text-green",
                       address: "Rural Route 5, County Seat"
                     }
                   ].map((audit, index) => (
@@ -575,12 +576,12 @@ export default function LandingPage() {
         <div className="container mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
             <div>
-              <div className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
+              <div className="inline-block px-3 py-1 rounded-full benton-bg-light-sand/20 benton-text-sand text-sm font-medium mb-4 benton-body">
                 About
               </div>
-              <h2 className="text-3xl md:text-4xl font-bold mb-6">Built for County Assessors</h2>
-              <p className="text-lg text-muted-foreground mb-6">
-                County Audit Hub was developed specifically for the needs of county assessment departments, with input from experienced assessors and supervisors.
+              <h2 className="text-3xl md:text-4xl font-bold mb-6 benton-heading">Built for County Assessors</h2>
+              <p className="text-lg text-muted-foreground mb-6 benton-body">
+                County Audit Hub was developed specifically for the needs of Benton County assessment departments, with input from experienced assessors and supervisors.
               </p>
               <div className="space-y-4">
                 {[
@@ -590,14 +591,14 @@ export default function LandingPage() {
                   "Detailed reporting and analytics capabilities"
                 ].map((feature, index) => (
                   <div key={index} className="flex items-start gap-3">
-                    <div className="mt-1 w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                      <Check className="h-3 w-3 text-primary" />
+                    <div className="mt-1 w-5 h-5 rounded-full benton-bg-sand/20 flex items-center justify-center flex-shrink-0">
+                      <Check className="h-3 w-3 benton-text-sand" />
                     </div>
-                    <p className="text-foreground/80">{feature}</p>
+                    <p className="text-foreground/80 benton-body">{feature}</p>
                   </div>
                 ))}
               </div>
-              <Button className="mt-8 btn-depth" onClick={() => setShowLoginForm(true)}>
+              <Button className="mt-8 btn-depth benton-bg-blue benton-text-white hover:benton-bg-dark-blue benton-heading" onClick={() => setShowLoginForm(true)}>
                 Access Dashboard
               </Button>
             </div>
@@ -606,27 +607,27 @@ export default function LandingPage() {
               <div className="absolute -z-10 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3/4 h-3/4 bg-primary/5 rounded-full blur-xl"></div>
               
               <div className="col-span-2 sm:col-span-1 bg-card shadow-md rounded-lg border border-border/40 p-5 transform hover:-translate-y-1 transition-transform">
-                <BarChart3 className="h-10 w-10 text-primary mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Performance Metrics</h3>
-                <p className="text-sm text-muted-foreground">Track assessment volume, approval rates, and processing times</p>
+                <BarChart3 className="h-10 w-10 benton-text-blue mb-4" />
+                <h3 className="text-lg font-semibold mb-2 benton-heading">Performance Metrics</h3>
+                <p className="text-sm text-muted-foreground benton-body">Track assessment volume, approval rates, and processing times</p>
               </div>
               
               <div className="col-span-2 sm:col-span-1 bg-card shadow-md rounded-lg border border-border/40 p-5 transform hover:-translate-y-1 transition-transform sm:translate-y-6">
-                <Map className="h-10 w-10 text-primary mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Geospatial Analysis</h3>
-                <p className="text-sm text-muted-foreground">Visualize assessment distribution across the county</p>
+                <Map className="h-10 w-10 benton-text-green mb-4" />
+                <h3 className="text-lg font-semibold mb-2 benton-heading">Geospatial Analysis</h3>
+                <p className="text-sm text-muted-foreground benton-body">Visualize assessment distribution across the county</p>
               </div>
               
               <div className="col-span-2 sm:col-span-1 bg-card shadow-md rounded-lg border border-border/40 p-5 transform hover:-translate-y-1 transition-transform">
-                <FileSpreadsheet className="h-10 w-10 text-primary mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Comprehensive Reports</h3>
-                <p className="text-sm text-muted-foreground">Generate detailed reports for county stakeholders</p>
+                <FileSpreadsheet className="h-10 w-10 benton-text-sand mb-4" />
+                <h3 className="text-lg font-semibold mb-2 benton-heading">Comprehensive Reports</h3>
+                <p className="text-sm text-muted-foreground benton-body">Generate detailed reports for county stakeholders</p>
               </div>
               
               <div className="col-span-2 sm:col-span-1 bg-card shadow-md rounded-lg border border-border/40 p-5 transform hover:-translate-y-1 transition-transform sm:translate-y-6">
-                <Building className="h-10 w-10 text-primary mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Property Portfolio</h3>
-                <p className="text-sm text-muted-foreground">Manage all property types in a unified system</p>
+                <Building className="h-10 w-10 benton-text-light-green mb-4" />
+                <h3 className="text-lg font-semibold mb-2 benton-heading">Property Portfolio</h3>
+                <p className="text-sm text-muted-foreground benton-body">Manage all property types in a unified system</p>
               </div>
             </div>
           </div>
@@ -638,25 +639,25 @@ export default function LandingPage() {
         <div className="container mx-auto px-6">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="flex items-center gap-2 mb-6 md:mb-0">
-              <Landmark className="h-6 w-6 text-primary" />
-              <span className="text-xl font-bold">County Audit Hub</span>
+              <Landmark className="h-6 w-6 benton-text-blue" />
+              <span className="text-xl font-bold benton-heading">County Audit Hub</span>
             </div>
             
-            <div className="flex flex-col md:flex-row items-center gap-6 text-muted-foreground">
-              <a href="#features" className="hover:text-primary transition-colors">Features</a>
-              <a href="#workflow" className="hover:text-primary transition-colors">Workflow</a>
-              <a href="#about" className="hover:text-primary transition-colors">About</a>
-              <Button variant="outline" onClick={() => setShowLoginForm(true)}>Sign In</Button>
+            <div className="flex flex-col md:flex-row items-center gap-6 text-muted-foreground benton-body">
+              <a href="#features" className="hover:benton-text-blue transition-colors">Features</a>
+              <a href="#workflow" className="hover:benton-text-blue transition-colors">Workflow</a>
+              <a href="#about" className="hover:benton-text-blue transition-colors">About</a>
+              <Button variant="outline" onClick={() => setShowLoginForm(true)} className="benton-text-blue benton-border-blue hover:benton-bg-blue hover:benton-text-white">Sign In</Button>
             </div>
           </div>
           
           <div className="mt-8 pt-8 border-t border-border/20 flex flex-col md:flex-row justify-between items-center">
-            <p className="text-sm text-muted-foreground mb-4 md:mb-0">
+            <p className="text-sm text-muted-foreground mb-4 md:mb-0 benton-body">
               © {new Date().getFullYear()} Benton County Assessor's Office. All rights reserved.
             </p>
-            <div className="flex gap-4">
-              <span className="text-sm text-muted-foreground">Privacy Policy</span>
-              <span className="text-sm text-muted-foreground">Terms of Service</span>
+            <div className="flex gap-4 benton-body">
+              <span className="text-sm text-muted-foreground hover:benton-text-blue cursor-pointer transition-colors">Privacy Policy</span>
+              <span className="text-sm text-muted-foreground hover:benton-text-blue cursor-pointer transition-colors">Terms of Service</span>
             </div>
           </div>
         </div>

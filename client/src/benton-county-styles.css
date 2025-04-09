@@ -1,214 +1,130 @@
-/* 
- * Benton County Assessor's Office
- * Shared styling for LevyMaster and County Audit Hub applications
- *
- * This CSS file contains custom styling for the spreadsheet-inspired 
- * interface elements used across Benton County Assessor applications.
- */
+/* Benton County Official Colors from Brand Guide */
+:root {
+  --benton-green: #34653f;
+  --benton-light-green: #6cb04a;
+  --benton-blue: #163e4a;
+  --benton-sand: #d4b254; 
+  --benton-light-sand: #e9d9af;
+  
+  /* Map styling variables */
+  --map-land: #f5f4ec;
+  --map-water: #a6cbe6;
+  --map-highlight: rgba(255, 255, 255, 0.25);
+  --topo-bg: url("data:image/svg+xml,%3Csvg width='1200' height='800' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M 0,100 C 200,150 400,50 600,100 S 1000,150 1200,100 M 0,200 C 200,250 400,150 600,200 S 1000,250 1200,200 M 0,300 C 200,350 400,250 600,300 S 1000,350 1200,300 M 0,400 C 200,450 400,350 600,400 S 1000,450 1200,400 M 0,500 C 200,550 400,450 600,500 S 1000,550 1200,500 M 0,600 C 200,650 400,550 600,600 S 1000,650 1200,600 M 0,700 C 200,750 400,650 600,700 S 1000,750 1200,700' stroke='rgba(0,0,0,0.05)' stroke-width='0.5' fill='none' /%3E%3C/svg%3E");
+  
+  --shadow-elevation-low: 
+    0px 0.6px 0.6px rgba(0, 0, 0, 0.03),
+    0px 1.2px 1.3px rgba(0, 0, 0, 0.04),
+    0px 2.4px 2.6px rgba(0, 0, 0, 0.05);
+  
+  --shadow-elevation-medium: 
+    0px 0.7px 0.8px rgba(0, 0, 0, 0.03),
+    0px 2.2px 2.4px rgba(0, 0, 0, 0.04),
+    0px 5.4px 5.8px rgba(0, 0, 0, 0.05),
+    0px 18px 20px rgba(0, 0, 0, 0.07);
+  
+  --transition-medium: 0.3s;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
 
-/* ======== Spreadsheet Form Fields ======== */
-.spreadsheet-section {
+/* Benton County specific utility classes */
+.benton-logo {
   background-color: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 1rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.spreadsheet-field {
-  display: flex;
-  align-items: center;
-  margin-bottom: 0.5rem;
-  min-height: 2.5rem;
-}
-
-.spreadsheet-label {
-  width: 35%;
-  font-size: 0.875rem;
-  color: #4b5563;
-  padding-right: 0.75rem;
-}
-
-.spreadsheet-input {
-  width: 65%;
-}
-
-.spreadsheet-number-input {
-  font-family: 'Consolas', 'Monaco', monospace;
-  text-align: right;
-  background-color: #fcfcfc !important;
-}
-
-.spreadsheet-calculated-input {
-  font-family: 'Consolas', 'Monaco', monospace;
-  text-align: right;
-  background-color: #f8f8f8 !important;
-  color: #4a5568 !important;
-  font-weight: 600;
-}
-
-/* ======== Grid Table ======== */
-.grid-table-container {
-  overflow-x: auto;
-  border: 1px solid #e2e8f0;
-  border-radius: 5px;
-}
-
-.grid-table {
-  width: 100%;
-  font-size: 0.875rem;
-}
-
-.grid-header {
-  display: flex;
-  background-color: #f1f5f9;
-  border-bottom: 2px solid #e2e8f0;
-  font-weight: 600;
-}
-
-.grid-body {
-  max-height: 250px;
-  overflow-y: auto;
-}
-
-.grid-row {
-  display: flex;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.grid-row:last-child {
-  border-bottom: none;
-}
-
-.grid-cell {
-  padding: 0.5rem 0.75rem;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* ======== Status Timeline ======== */
-.status-timeline {
-  display: flex;
-  margin: 1.5rem 0;
-  position: relative;
-}
-
-.status-step {
-  flex: 1;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.status-step-marker {
-  width: 14px;
-  height: 14px;
   border-radius: 50%;
-  background-color: #d1d5db;
-  border: 3px solid #f9fafb;
-  z-index: 1;
-}
-
-.status-step.completed .status-step-marker {
-  background-color: #10b981;
-}
-
-.status-step.current .status-step-marker {
-  background-color: #3b82f6;
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
-}
-
-.status-step-connector {
-  position: absolute;
-  top: 7px;
-  left: 50%;
-  width: 100%;
-  height: 2px;
-}
-
-.status-step-line {
-  background-color: #d1d5db;
-  height: 2px;
-  width: 100%;
-}
-
-.status-step.completed .status-step-line {
-  background-color: #10b981;
-}
-
-.status-step-label {
-  margin-top: 0.5rem;
-  font-size: 0.75rem;
-  text-align: center;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.status-step.current .status-step-label {
-  color: #3b82f6;
-  font-weight: 600;
-}
-
-.status-step.completed .status-step-label {
-  color: #10b981;
-}
-
-/* ======== Stat Cards ======== */
-.stat-card {
-  background-color: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 1rem;
-  min-width: 150px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.stat-card-title {
-  font-size: 0.75rem;
-  color: #6b7280;
-  margin-bottom: 0.25rem;
-}
-
-.stat-card-value {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 0.25rem;
-}
-
-.stat-card-trend {
   display: flex;
   align-items: center;
-  font-size: 0.75rem;
-  font-weight: 500;
+  justify-content: center;
+  padding: 0.25rem;
 }
 
-.stat-card-trend svg {
-  margin-right: 0.25rem;
+.benton-bg-green {
+  background-color: var(--benton-green);
 }
 
-/* ======== Form Layout ======== */
-.levy-master-form {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+.benton-bg-light-green {
+  background-color: var(--benton-light-green);
 }
 
-/* ======== Responsiveness ======== */
-@media screen and (max-width: 768px) {
-  .spreadsheet-field {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .spreadsheet-label {
-    width: 100%;
-    margin-bottom: 0.25rem;
-  }
-  
-  .spreadsheet-input {
-    width: 100%;
-  }
+.benton-bg-blue {
+  background-color: var(--benton-blue);
+}
+
+.benton-bg-sand {
+  background-color: var(--benton-sand);
+}
+
+.benton-bg-light-sand {
+  background-color: var(--benton-light-sand);
+}
+
+.benton-text-green {
+  color: var(--benton-green);
+}
+
+.benton-text-light-green {
+  color: var(--benton-light-green);
+}
+
+.benton-text-blue {
+  color: var(--benton-blue);
+}
+
+.benton-text-sand {
+  color: var(--benton-sand);
+}
+
+.benton-text-light-sand {
+  color: var(--benton-light-sand);
+}
+
+/* Benton County typography styles */
+.benton-heading {
+  font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-weight: 700;
+}
+
+.benton-body {
+  font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Benton County button styles */
+.benton-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--benton-green);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  font-weight: 600;
+  transition: background-color 0.2s ease;
+}
+
+.benton-button:hover {
+  background-color: color-mix(in srgb, var(--benton-green) 90%, white);
+}
+
+.benton-button.sand {
+  background-color: var(--benton-sand);
+  color: var(--benton-blue);
+}
+
+.benton-button.sand:hover {
+  background-color: color-mix(in srgb, var(--benton-sand) 90%, white);
+}
+
+/* Navigation styles */
+.benton-nav {
+  background-color: var(--benton-blue);
+  color: white;
+}
+
+/* County quick links */
+.county-link-icon {
+  width: 4rem;
+  height: 4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
 }
