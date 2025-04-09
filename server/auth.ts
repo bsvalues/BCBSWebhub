@@ -70,7 +70,8 @@ export function setupAuth(app: Express) {
       secure: false, // Must be false for HTTP development
       sameSite: 'lax',
       httpOnly: true,
-      path: '/'
+      path: '/',
+      domain: undefined // Allow browser to set this automatically to match current domain
     }
   };
 
@@ -105,6 +106,9 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/register", async (req, res, next) => {
+    console.log("Register attempt for user:", req.body.username);
+    console.log("Session ID at register start:", req.sessionID);
+    
     try {
       const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) {
@@ -118,17 +122,37 @@ export function setupAuth(app: Express) {
 
       req.login(user, (err) => {
         if (err) return next(err);
-        // Remove password from the response
-        const { password, ...userWithoutPassword } = user;
-        res.status(201).json(userWithoutPassword);
+        
+        // Save the session explicitly to ensure it's stored before response
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("Error saving session after registration:", saveErr);
+            return next(saveErr);
+          }
+          
+          console.log("User registered and logged in successfully:", user.username);
+          console.log("Session ID after registration:", req.sessionID);
+          console.log("Session saved:", !!req.session);
+          console.log("User in session:", !!req.user);
+          
+          // Set additional headers to help debug
+          res.header('X-Auth-Session-ID', req.sessionID);
+          res.header('X-Auth-Status', 'Authenticated');
+          
+          // Remove password from the response
+          const { password, ...userWithoutPassword } = user;
+          res.status(201).json(userWithoutPassword);
+        });
       });
     } catch (error) {
+      console.error("Registration error:", error);
       next(error);
     }
   });
 
   app.post("/api/login", (req, res, next) => {
     console.log("Login attempt for user:", req.body.username);
+    console.log("Session ID at login start:", req.sessionID);
     
     // Make sure we have valid parameters
     if (!req.body.username || !req.body.password) {
@@ -154,12 +178,27 @@ export function setupAuth(app: Express) {
           return next(loginErr);
         }
         
-        console.log("User logged in successfully:", user.username);
-        
-        // Remove password from the response
-        const { password, ...userWithoutPassword } = user;
-        
-        res.status(200).json(userWithoutPassword);
+        // Save the session explicitly to ensure it's stored before response
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("Error saving session after login:", saveErr);
+            return next(saveErr);
+          }
+          
+          console.log("User logged in successfully:", user.username);
+          console.log("Session ID after login:", req.sessionID);
+          console.log("Session saved:", !!req.session);
+          console.log("User in session:", !!req.user);
+          
+          // Set additional headers to help debug
+          res.header('X-Auth-Session-ID', req.sessionID);
+          res.header('X-Auth-Status', 'Authenticated');
+          
+          // Remove password from the response
+          const { password, ...userWithoutPassword } = user;
+          
+          res.status(200).json(userWithoutPassword);
+        });
       });
     })(req, res, next);
   });

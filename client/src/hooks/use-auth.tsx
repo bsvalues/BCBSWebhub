@@ -86,10 +86,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: `Welcome back, ${user.fullName}!`,
       });
       
-      // Force page reload to ensure proper cookie handling
-      setTimeout(() => {
+      // Instead of directly changing window.location, we'll first test if the session is valid
+      // by making another request to get the user data
+      fetch("/api/user", {
+        method: "GET",
+        headers: {
+          "Cache-Control": "no-cache"
+        },
+        credentials: "include"
+      })
+      .then(res => {
+        if (!res.ok) {
+          console.error("Session validation failed after login:", res.status);
+          throw new Error("Session validation failed");
+        }
+        return res.json();
+      })
+      .then(validatedUser => {
+        console.log("Session validated successfully:", validatedUser);
+        // Force full page reload to ensure proper session handling
         window.location.href = "/";
-      }, 500);
+      })
+      .catch(err => {
+        console.error("Error validating session after login:", err);
+        // Try one more time with different approach - hard reload
+        window.location.replace("/");
+      });
     },
     onError: (error: Error) => {
       console.error("Login error:", error.message);
@@ -138,10 +160,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: `Welcome, ${user.fullName}!`,
       });
       
-      // Force page reload to ensure proper cookie handling
-      setTimeout(() => {
+      // Use the same session validation approach as with login
+      fetch("/api/user", {
+        method: "GET",
+        headers: {
+          "Cache-Control": "no-cache"
+        },
+        credentials: "include"
+      })
+      .then(res => {
+        if (!res.ok) {
+          console.error("Session validation failed after registration:", res.status);
+          throw new Error("Session validation failed");
+        }
+        return res.json();
+      })
+      .then(validatedUser => {
+        console.log("Session validated successfully:", validatedUser);
+        // Force full page reload to ensure proper session handling
         window.location.href = "/";
-      }, 500);
+      })
+      .catch(err => {
+        console.error("Error validating session after registration:", err);
+        // Try one more time with different approach - hard reload
+        window.location.replace("/");
+      });
     },
     onError: (error: Error) => {
       console.error("Registration error:", error.message);
