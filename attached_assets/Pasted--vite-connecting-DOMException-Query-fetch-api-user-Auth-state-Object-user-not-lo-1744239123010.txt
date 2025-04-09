@@ -1,0 +1,108 @@
+[vite] connecting...
+DOMException {}
+
+Query fetch: /api/user
+Auth state: 
+Object {user: "not logged in", isLoading: true, hasError: false}
+Query response status: 401
+Handling 401 as null return
+Warning: validateDOMNesting(...): <a> cannot appear as a descendant of &lt;a&gt;.
+    at a
+    at a
+    at https://ec67c6ef-57c6-4f83-bca4-e004304e1e87-00-13iuk0jvop4h6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=e7614356:337:18
+    at div
+    at div
+    at Sidebar (https://ec67c6ef-57c6-4f83-bca4-e004304e1e87-00-13iuk0jvop4h6.spock.replit.dev/src/components/sidebar.tsx?t=1744238843392:22:22)
+    at div
+    at MainLayout (https://ec67c6ef-57c6-4f83-bca4-e004304e1e87-00-13iuk0jvop4h6.spock.replit.dev/src/layouts/main-layout.tsx?t=1744238843392:19:38)
+    at AuthenticatedApp (https://ec67c6ef-57c6-4f83-bca4-e004304e1e87-00-13iuk0jvop4h6.spock.replit.dev/src/App.tsx?t=1744238843392&v=qPTSAUlATyl0b1052vU8a:36:16)
+    at AuthProvider (https://ec67c6ef-57c6-4f83-bca4-e004304e1e87-00-13iuk0jvop4h6.spock.replit.dev/src/hooks/use-auth.tsx?t=1744238843392:26:32)
+    at App
+    at QueryClientProvider (https://ec67c6ef-57c6-4f83-bca4-e004304e1e87-00-13iuk0jvop4h6.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=2ca9ea53:2805:3)
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A47.343Z&end=2025-04-09T22%3A51%3A47.343Z&type=users without data
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A47.343Z&end=2025-04-09T22%3A51%3A47.343Z&type=time without data
+Connecting to WebSocket at: wss://ec67c6ef-57c6-4f83-bca4-e004304e1e87-00-13iuk0jvop4h6.spock.replit.dev/ws
+Auth state: 
+Object {user: "not logged in", isLoading: false, hasError: false}
+GET response from /api/analytics/workload?start=2025-03-26T22%3A51%3A47.343Z&end=2025-04-09T22%3A51%3A47.343Z&type=users: 401 Unauthorized
+Error in GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A47.343Z&amp;end=2025-04-09T22%3A51%3A47.343Z&amp;type=users: 
+Error {}
+
+GET response from /api/analytics/workload?start=2025-03-26T22%3A51%3A47.343Z&end=2025-04-09T22%3A51%3A47.343Z&type=time: 401 Unauthorized
+Error in GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A47.343Z&amp;end=2025-04-09T22%3A51%3A47.343Z&amp;type=time: 
+Error {}
+
+WebSocket connected
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A47.343Z&end=2025-04-09T22%3A51%3A47.343Z&type=users without data
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A47.343Z&end=2025-04-09T22%3A51%3A47.343Z&type=time without data
+GET response from /api/analytics/workload?start=2025-03-26T22%3A51%3A47.343Z&end=2025-04-09T22%3A51%3A47.343Z&type=users: 401 Unauthorized
+Error in GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A47.343Z&amp;end=2025-04-09T22%3A51%3A47.343Z&amp;type=users: 
+Error {}
+
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A48.521Z&end=2025-04-09T22%3A51%3A48.521Z&type=users without data
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A48.521Z&end=2025-04-09T22%3A51%3A48.521Z&type=time without data
+GET response from /api/analytics/workload?start=2025-03-26T22%3A51%3A47.343Z&end=2025-04-09T22%3A51%3A47.343Z&type=time: 401 Unauthorized
+Error in GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A47.343Z&amp;end=2025-04-09T22%3A51%3A47.343Z&amp;type=time: 
+Error {}
+
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A48.547Z&end=2025-04-09T22%3A51%3A48.547Z&type=users without data
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A48.547Z&end=2025-04-09T22%3A51%3A48.547Z&type=time without data
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A48.551Z&end=2025-04-09T22%3A51%3A48.551Z&type=users without data
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A48.551Z&end=2025-04-09T22%3A51%3A48.551Z&type=time without data
+GET response from /api/analytics/workload?start=2025-03-26T22%3A51%3A48.521Z&end=2025-04-09T22%3A51%3A48.521Z&type=time: 401 Unauthorized
+Error in GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A48.521Z&amp;end=2025-04-09T22%3A51%3A48.521Z&amp;type=time: 
+Error {}
+
+GET response from /api/analytics/workload?start=2025-03-26T22%3A51%3A48.521Z&end=2025-04-09T22%3A51%3A48.521Z&type=users: 401 Unauthorized
+Error in GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A48.521Z&amp;end=2025-04-09T22%3A51%3A48.521Z&amp;type=users: 
+Error {}
+
+GET response from /api/analytics/workload?start=2025-03-26T22%3A51%3A48.547Z&end=2025-04-09T22%3A51%3A48.547Z&type=users: 401 Unauthorized
+GET response from /api/analytics/workload?start=2025-03-26T22%3A51%3A48.547Z&end=2025-04-09T22%3A51%3A48.547Z&type=time: 401 Unauthorized
+Error in GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A48.547Z&amp;end=2025-04-09T22%3A51%3A48.547Z&amp;type=time: 
+Error {}
+
+Error in GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A48.547Z&amp;end=2025-04-09T22%3A51%3A48.547Z&amp;type=users: 
+Error {}
+
+GET response from /api/analytics/workload?start=2025-03-26T22%3A51%3A48.551Z&end=2025-04-09T22%3A51%3A48.551Z&type=users: 401 Unauthorized
+Error in GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A48.551Z&amp;end=2025-04-09T22%3A51%3A48.551Z&amp;type=users: 
+Error {}
+
+GET response from /api/analytics/workload?start=2025-03-26T22%3A51%3A48.551Z&end=2025-04-09T22%3A51%3A48.551Z&type=time: 401 Unauthorized
+Error in GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A48.551Z&amp;end=2025-04-09T22%3A51%3A48.551Z&amp;type=time: 
+Error {}
+
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A48.551Z&end=2025-04-09T22%3A51%3A48.551Z&type=users without data
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A48.551Z&end=2025-04-09T22%3A51%3A48.551Z&type=time without data
+GET response from /api/analytics/workload?start=2025-03-26T22%3A51%3A48.551Z&end=2025-04-09T22%3A51%3A48.551Z&type=time: 401 Unauthorized
+Error in GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A48.551Z&amp;end=2025-04-09T22%3A51%3A48.551Z&amp;type=time: 
+Error {}
+
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A49.727Z&end=2025-04-09T22%3A51%3A49.727Z&type=users without data
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A49.727Z&end=2025-04-09T22%3A51%3A49.727Z&type=time without data
+GET response from /api/analytics/workload?start=2025-03-26T22%3A51%3A48.551Z&end=2025-04-09T22%3A51%3A48.551Z&type=users: 401 Unauthorized
+Error in GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A48.551Z&amp;end=2025-04-09T22%3A51%3A48.551Z&amp;type=users: 
+Error {}
+
+GET response from /api/analytics/workload?start=2025-03-26T22%3A51%3A49.727Z&end=2025-04-09T22%3A51%3A49.727Z&type=time: 401 Unauthorized
+GET response from /api/analytics/workload?start=2025-03-26T22%3A51%3A49.727Z&end=2025-04-09T22%3A51%3A49.727Z&type=users: 401 Unauthorized
+Error in GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A49.727Z&amp;end=2025-04-09T22%3A51%3A49.727Z&amp;type=time: 
+Error {}
+
+Error in GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A49.727Z&amp;end=2025-04-09T22%3A51%3A49.727Z&amp;type=users: 
+Error {}
+
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A49.727Z&end=2025-04-09T22%3A51%3A49.727Z&type=time without data
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A49.727Z&end=2025-04-09T22%3A51%3A49.727Z&type=users without data
+GET response from /api/analytics/workload?start=2025-03-26T22%3A51%3A49.727Z&end=2025-04-09T22%3A51%3A49.727Z&type=time: 401 Unauthorized
+GET response from /api/analytics/workload?start=2025-03-26T22%3A51%3A49.727Z&end=2025-04-09T22%3A51%3A49.727Z&type=users: 401 Unauthorized
+Error in GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A49.727Z&amp;end=2025-04-09T22%3A51%3A49.727Z&amp;type=time: 
+Error {}
+
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A50.908Z&end=2025-04-09T22%3A51%3A50.908Z&type=users without data
+Making GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A50.908Z&end=2025-04-09T22%3A51%3A50.908Z&type=time without data
+Error in GET request to /api/analytics/workload?start=2025-03-26T22%3A51%3A49.727Z&amp;end=2025-04-09T22%3A51%3A49.727Z&amp;type=users: 
+Error {}
+
+GET response from /api/analytics/workload?start=2025-03-26T22%3A51%3A50.908Z&end=2025-04-09T22%3A51%3A50.908Z&type=time: 401 Unauthorized
