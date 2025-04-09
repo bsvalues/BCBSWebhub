@@ -3,13 +3,24 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     try {
+      // Clone the response before consuming it
+      const clonedRes = res.clone();
+      
       // Try to parse the error as JSON first
-      const errorData = await res.json();
-      throw new Error(errorData.error || `${res.status}: ${res.statusText}`);
-    } catch (e) {
+      const errorData = await clonedRes.json().catch(() => null);
+      if (errorData) {
+        throw new Error(errorData.error || `${res.status}: ${res.statusText}`);
+      }
+      
       // If JSON parsing fails, use text
-      const text = await res.text() || res.statusText;
+      const text = await res.text().catch(() => res.statusText);
       throw new Error(`${res.status}: ${text}`);
+    } catch (e) {
+      // If all else fails, just throw the status
+      if (!(e instanceof Error)) {
+        throw new Error(`${res.status}: ${res.statusText}`);
+      }
+      throw e;
     }
   }
 }
@@ -44,12 +55,18 @@ export async function apiRequest(
     
     // Handle error responses
     if (!res.ok) {
-      await throwIfResNotOk(res);
+      await throwIfResNotOk(res.clone());
     }
     
     return res;
   } catch (error) {
     console.error(`Error in ${method} request to ${url}:`, error);
+    
+    // Handle common network errors with more user-friendly messages
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      throw new Error('Network connection issue. Please check your internet connection.');
+    }
+    
     throw error;
   }
 }
@@ -86,14 +103,25 @@ export const getQueryFn: <T>(options: {
       }
   
       if (!res.ok) {
-        await throwIfResNotOk(res);
+        await throwIfResNotOk(res.clone()); // Clone the response before consuming it
       }
       
-      const data = await res.json();
-      console.log('Query response data:', data ? 'received' : 'empty');
-      return data;
+      try {
+        const data = await res.json();
+        console.log('Query response data:', data ? 'received' : 'empty');
+        return data;
+      } catch (jsonError) {
+        console.error('Error parsing JSON response:', jsonError);
+        return null; // Return null for empty or invalid JSON responses
+      }
     } catch (error) {
       console.error(`Error in query to ${queryKey[0]}:`, error);
+      
+      // Handle common network errors and provide more user-friendly messages
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        throw new Error('Network connection issue. Please check your internet connection.');
+      }
+      
       throw error;
     }
   };

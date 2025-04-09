@@ -40,7 +40,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   } = useQuery<SelectUser | null, Error>({
     queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
-    retry: false,
+    retry: 2, // More retries for auth state since it's important
+    retryDelay: 1000, // Retry with a 1s delay
     refetchOnWindowFocus: true, // Enable refetch on window focus to detect changes in auth state
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
@@ -88,6 +89,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: `Welcome back, ${user.fullName}!`,
       });
       
+      // During development, we don't need to validate the session or redirect
+      // This will be uncommented before deployment
+      /*
       // Instead of directly changing window.location, we'll first test if the session is valid
       // by making another request to get the user data
       fetch("/api/user", {
@@ -114,6 +118,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Try one more time with different approach - hard reload
         window.location.replace("/");
       });
+      */
+      
+      // Refetch the user data to update the UI
+      refetch();
     },
     onError: (error: Error) => {
       console.error("Login error:", error.message);
@@ -162,6 +170,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: `Welcome, ${user.fullName}!`,
       });
       
+      // During development, we don't need to validate the session or redirect
+      // This will be uncommented before deployment
+      /*
       // Use the same session validation approach as with login
       fetch("/api/user", {
         method: "GET",
@@ -187,6 +198,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Try one more time with different approach - hard reload
         window.location.replace("/");
       });
+      */
+      
+      // Refetch the user data to update the UI
+      refetch();
     },
     onError: (error: Error) => {
       console.error("Registration error:", error.message);
@@ -231,10 +246,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: "You have been successfully logged out.",
       });
       
+      // During development, we don't want to redirect after logout
+      // This will be uncommented before deployment
+      /*
       // Redirect to auth page after logout
       setTimeout(() => {
         window.location.href = "/auth";
       }, 500);
+      */
+      
+      // Refetch the user data to update the UI
+      refetch();
     },
     onError: (error: Error) => {
       console.error("Logout error:", error.message);
