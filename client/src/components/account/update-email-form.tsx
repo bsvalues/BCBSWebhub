@@ -22,6 +22,7 @@ type UpdateEmailFormValues = z.infer<typeof updateEmailSchema>;
 export default function UpdateEmailForm() {
   const { user, updateEmailMutation } = useAuth();
   const [success, setSuccess] = useState(false);
+  const isAuthenticated = user !== null;
 
   // Initialize form with current email if available
   const form = useForm<UpdateEmailFormValues>({
@@ -53,6 +54,14 @@ export default function UpdateEmailForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {!isAuthenticated && (
+          <div className="p-4 mb-4 bg-amber-50 border border-amber-200 rounded-md">
+            <p className="text-amber-800 text-sm">
+              <strong>Development Mode:</strong> Email updates require authentication in production.
+            </p>
+          </div>
+        )}
+        
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
@@ -75,7 +84,7 @@ export default function UpdateEmailForm() {
             <div className="flex items-center justify-between">
               <Button 
                 type="submit" 
-                disabled={updateEmailMutation.isPending}
+                disabled={updateEmailMutation.isPending || !isAuthenticated}
               >
                 {updateEmailMutation.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

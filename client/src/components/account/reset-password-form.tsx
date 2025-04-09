@@ -19,13 +19,14 @@ const resetPasswordSchema = z.object({
 type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>;
 
 export default function ResetPasswordForm() {
-  const { resetPasswordMutation } = useAuth();
+  const { user, resetPasswordMutation } = useAuth();
   const [submitted, setSubmitted] = useState(false);
+  const isAuthenticated = user !== null;
 
   const form = useForm<ResetPasswordFormValues>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: {
-      username: ""
+      username: user?.username || ""
     }
   });
 
@@ -47,6 +48,14 @@ export default function ResetPasswordForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {!isAuthenticated && !submitted && (
+          <div className="p-4 mb-4 bg-amber-50 border border-amber-200 rounded-md">
+            <p className="text-amber-800 text-sm">
+              <strong>Development Mode:</strong> Password resets require authentication in production.
+            </p>
+          </div>
+        )}
+      
         {submitted ? (
           <div className="text-center py-4">
             <h3 className="text-lg font-medium mb-2">Request Submitted</h3>

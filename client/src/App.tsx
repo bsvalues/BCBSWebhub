@@ -25,11 +25,12 @@ function AuthenticatedApp() {
   useEffect(() => {
     if (auth.isLoading) return; // Skip navigation logic during loading
     
-    // Only redirect to protected routes when user is not authenticated
-    if (!auth.user && 
-      !["/", "/auth", "/style-demo", "/modern-style-demo", "/gis-dashboard"].includes(location)) {
-      navigate("/");
-    }
+    // During development, don't redirect to auth page
+    // This will be re-enabled before deployment
+    // if (!auth.user && 
+    //   !["/", "/auth", "/style-demo", "/modern-style-demo", "/gis-dashboard"].includes(location)) {
+    //   navigate("/");
+    // }
   }, [auth.user, auth.isLoading, location, navigate]);
   
   // Show loading spinner while checking authentication
@@ -45,29 +46,21 @@ function AuthenticatedApp() {
   return (
     <>
       <ConnectionAlert />
-      {auth.user ? (
-        <MainLayout>
-          <Switch>
-            <Route path="/" component={Dashboard} />
-            <Route path="/audit-queue" component={AuditQueue} />
-            <Route path="/create-audit" component={CreateAudit} />
-            <Route path="/analytics" component={Analytics} />
-            <Route path="/audit-history" component={AuditHistory} />
-            <Route path="/account" component={AccountManagement} />
-            <Route path="/modern-style-demo" component={ModernStyleDemo} />
-            <Route path="/gis-dashboard" component={GISDashboard} />
-            <Route component={NotFound} />
-          </Switch>
-        </MainLayout>
-      ) : (
+      {/* During development, allow access to all routes regardless of auth status */}
+      <MainLayout>
         <Switch>
-          <Route path="/" component={LandingPage} />
-          <Route path="/style-demo" component={StyleDemo} />
+          <Route path="/" component={Dashboard} />
+          <Route path="/audit-queue" component={AuditQueue} />
+          <Route path="/create-audit" component={CreateAudit} />
+          <Route path="/analytics" component={Analytics} />
+          <Route path="/audit-history" component={AuditHistory} />
+          <Route path="/account" component={AccountManagement} />
           <Route path="/modern-style-demo" component={ModernStyleDemo} />
           <Route path="/gis-dashboard" component={GISDashboard} />
-          <Route component={LandingPage} />
+          <Route path="/style-demo" component={StyleDemo} />
+          <Route component={NotFound} />
         </Switch>
-      )}
+      </MainLayout>
     </>
   );
 }

@@ -8,12 +8,12 @@ export default function AccountManagement() {
   const { user, isLoading } = useAuth();
   const [location, navigate] = useLocation();
 
-  // Redirect to auth page if not authenticated
-  useEffect(() => {
-    if (!isLoading && !user) {
-      navigate("/auth");
-    }
-  }, [user, isLoading, navigate]);
+  // During development, don't redirect if not authenticated
+  // useEffect(() => {
+  //   if (!isLoading && !user) {
+  //     navigate("/auth");
+  //   }
+  // }, [user, isLoading, navigate]);
 
   if (isLoading) {
     return (
@@ -23,14 +23,26 @@ export default function AccountManagement() {
     );
   }
 
-  if (!user) {
-    return null; // Will redirect via useEffect
-  }
+  // For development, show non-authenticated message instead of redirecting
+  const isAuthenticated = user !== null;
 
   return (
     <div className="container max-w-5xl mx-auto py-8 px-4">
       <h1 className="text-3xl font-bold mb-2">Account Management</h1>
       <p className="text-muted-foreground mb-8">Manage your account settings and preferences</p>
+      
+      {!isAuthenticated ? (
+        <div className="bg-blue-50 border border-blue-200 p-6 rounded-lg mb-8">
+          <h3 className="text-lg font-medium text-blue-800 mb-2">Development Mode</h3>
+          <p className="text-blue-700 mb-4">
+            You are currently not logged in. In production, this page would require authentication.
+            For development purposes, you can still view and interact with the account management features.
+          </p>
+          <p className="text-blue-700">
+            Note: Some functionality may not work fully without authentication.
+          </p>
+        </div>
+      ) : null}
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
@@ -38,19 +50,19 @@ export default function AccountManagement() {
           <div className="bg-card p-6 rounded-lg shadow-sm border mb-6">
             <div className="mb-4">
               <label className="text-sm font-medium text-muted-foreground">Username</label>
-              <p className="text-foreground">{user.username}</p>
+              <p className="text-foreground">{user?.username || "Not logged in"}</p>
             </div>
             <div className="mb-4">
               <label className="text-sm font-medium text-muted-foreground">Full Name</label>
-              <p className="text-foreground">{user.fullName}</p>
+              <p className="text-foreground">{user?.fullName || "Not available"}</p>
             </div>
             <div className="mb-4">
               <label className="text-sm font-medium text-muted-foreground">Role</label>
-              <p className="text-foreground capitalize">{user.role}</p>
+              <p className="text-foreground capitalize">{user?.role || "Not available"}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Email</label>
-              <p className="text-foreground">{user.email || "No email address set"}</p>
+              <p className="text-foreground">{user?.email || "No email address set"}</p>
             </div>
           </div>
           
