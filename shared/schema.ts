@@ -8,8 +8,11 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   fullName: text("full_name").notNull(),
+  email: text("email"),
   role: text("role").notNull().default("auditor"), // auditor, supervisor, admin
+  externalAuth: boolean("external_auth").default(false), // Flag for users authenticated via SSO
   createdAt: timestamp("created_at").defaultNow(),
+  lastLogin: timestamp("last_login"),
 });
 
 // Create user schema
@@ -17,7 +20,9 @@ export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
   fullName: true,
+  email: true,
   role: true,
+  externalAuth: true,
 });
 
 // Audit status enum - expanded with more granular states

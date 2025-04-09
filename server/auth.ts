@@ -7,6 +7,7 @@ import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
 import * as bcrypt from "bcrypt";
+import { emailService } from "./email-service";
 
 // Extend SessionData interface to include our custom properties
 declare module 'express-session' {
@@ -115,10 +116,31 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ error: "Username already exists" });
       }
 
+      // For non-SSO users, generate a temporary password if needed
+      let temporaryPassword: string | undefined;
+      const isExternalAuth = req.body.externalAuth === true;
+      
+      if (!isExternalAuth && !req.body.password) {
+        // Generate a secure temporary password for accounts that need one
+        temporaryPassword = emailService.generateTemporaryPassword(12);
+        req.body.password = temporaryPassword;
+      }
+      
       const user = await storage.createUser({
         ...req.body,
         password: await hashPassword(req.body.password),
       });
+
+      // Send welcome email with temporary password if applicable
+      if (user.email) {
+        try {
+          await emailService.sendWelcomeEmail(user, temporaryPassword);
+          console.log("Welcome email sent to:", user.username);
+        } catch (emailError) {
+          console.error("Failed to send welcome email:", emailError);
+          // Continue with registration even if email fails
+        }
+      }
 
       req.login(user, (err) => {
         if (err) return next(err);
@@ -141,7 +163,14 @@ export function setupAuth(app: Express) {
           
           // Remove password from the response
           const { password, ...userWithoutPassword } = user;
-          res.status(201).json(userWithoutPassword);
+          
+          // Include information about email notification in the response
+          const emailSent = !!user.email;
+          res.status(201).json({ 
+            ...userWithoutPassword, 
+            emailSent,
+            temporaryPasswordGenerated: !!temporaryPassword 
+          });
         });
       });
     } catch (error) {
@@ -230,6 +259,105 @@ export function setupAuth(app: Express) {
         res.sendStatus(200);
       });
     });
+  });
+
+  app.post("/api/reset-password", async (req, res, next) => {
+    const { username } = req.body;
+    
+    if (!username) {
+      return res.status(400).json({ error: "Username is required" });
+    }
+    
+    try {
+      // Find the user
+      const user = await storage.getUserByUsername(username);
+      if (!user) {
+        // For security reasons, don't reveal that the user doesn't exist
+        // Just return a generic success message
+        return res.status(200).json({ 
+          message: "If the account exists, a password reset email has been sent" 
+        });
+      }
+      
+      // Generate a temporary password
+      const temporaryPassword = emailService.generateTemporaryPassword(12);
+      
+      // Update the user's password
+      const updatedUser = await storage.updateUserPassword(
+        user.id, 
+        await hashPassword(temporaryPassword)
+      );
+      
+      // Check if the password was successfully updated
+      if (!updatedUser) {
+        console.error("Failed to update password for user:", username);
+        return res.status(500).json({ error: "Failed to reset password" });
+      }
+      
+      // Send the password reset email with the temporary password
+      if (user.email) {
+        try {
+          await emailService.sendPasswordResetEmail(user, temporaryPassword);
+          console.log("Password reset email sent to:", user.username);
+        } catch (emailError) {
+          console.error("Failed to send password reset email:", emailError);
+          // Continue even if email fails
+        }
+      } else {
+        console.log("User has no email address to send password reset to:", user.username);
+      }
+      
+      // Return success message without revealing details
+      return res.status(200).json({ 
+        message: "If the account exists, a password reset email has been sent" 
+      });
+    } catch (error) {
+      console.error("Password reset error:", error);
+      next(error);
+    }
+  });
+  
+  // Update user email endpoint - requires authentication
+  app.post("/api/update-email", (req, res, next) => {
+    // Ensure user is authenticated
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    
+    const { email } = req.body;
+    
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: "Valid email address is required" });
+    }
+    
+    // Simple email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: "Invalid email format" });
+    }
+    
+    try {
+      (async () => {
+        // Update user's email in the database
+        const updatedUser = await storage.updateUserEmail(req.user!.id, email);
+        
+        if (!updatedUser) {
+          return res.status(500).json({ error: "Failed to update email address" });
+        }
+        
+        // Log the change
+        console.log(`User ${req.user!.username} updated email to: ${email}`);
+        
+        // Return success response
+        res.status(200).json({ 
+          message: "Email address updated successfully",
+          email: updatedUser.email
+        });
+      })();
+    } catch (error) {
+      console.error("Email update error:", error);
+      next(error);
+    }
   });
 
   app.get("/api/user", (req, res) => {

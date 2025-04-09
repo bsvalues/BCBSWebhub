@@ -16,6 +16,8 @@ type AuthContextType = {
   loginMutation: UseMutationResult<SelectUser, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
   registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
+  updateEmailMutation: UseMutationResult<{ email: string }, Error, { email: string }>;
+  resetPasswordMutation: UseMutationResult<{ message: string }, Error, { username: string }>;
 };
 
 // Type for login data 
@@ -243,6 +245,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     },
   });
+  
+  // Update email mutation
+  const updateEmailMutation = useMutation({
+    mutationFn: async (data: { email: string }) => {
+      console.log("Email update attempt:", data.email);
+      try {
+        const res = await apiRequest("POST", "/api/update-email", data);
+        return await res.json();
+      } catch (error) {
+        console.error("Email update error:", error);
+        throw error instanceof Error ? error : new Error("Failed to update email");
+      }
+    },
+    onSuccess: (data) => {
+      console.log("Email update successful:", data.email);
+      
+      // Update the user data in the cache to include the new email
+      if (user) {
+        const updatedUser = { ...user, email: data.email };
+        queryClient.setQueryData(["/api/user"], updatedUser);
+      }
+      
+      toast({
+        title: "Email updated",
+        description: "Your email address has been successfully updated.",
+      });
+    },
+    onError: (error: Error) => {
+      console.error("Email update error:", error.message);
+      toast({
+        title: "Failed to update email",
+        description: error.message || "Could not update your email address",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Reset password mutation
+  const resetPasswordMutation = useMutation({
+    mutationFn: async (data: { username: string }) => {
+      console.log("Password reset attempt for:", data.username);
+      try {
+        const res = await apiRequest("POST", "/api/reset-password", data);
+        return await res.json();
+      } catch (error) {
+        console.error("Password reset error:", error);
+        throw error instanceof Error ? error : new Error("Failed to reset password");
+      }
+    },
+    onSuccess: (data) => {
+      console.log("Password reset request successful");
+      toast({
+        title: "Password reset initiated",
+        description: data.message || "If your account exists, a password reset email has been sent.",
+      });
+    },
+    onError: (error: Error) => {
+      console.error("Password reset error:", error.message);
+      toast({
+        title: "Password reset failed",
+        description: error.message || "Could not process your password reset request",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Log the user status on state changes for debugging
   useEffect(() => {
@@ -269,6 +336,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginMutation,
         logoutMutation,
         registerMutation,
+        updateEmailMutation,
+        resetPasswordMutation,
       }}
     >
       {children}

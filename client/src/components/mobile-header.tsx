@@ -21,6 +21,7 @@ export default function MobileHeader() {
       case '/audit-queue': return 'Audit Queue';
       case '/analytics': return 'Analytics';
       case '/audit-history': return 'Audit History';
+      case '/account': return 'Account Management';
       case '/settings': return 'Settings';
       default: return 'County Audit Hub';
     }
@@ -78,6 +79,13 @@ export default function MobileHeader() {
                 <a className={`flex items-center px-4 py-3 mt-1 rounded-lg ${isActive("/audit-history") ? "bg-blue-700 text-white" : "text-neutral-300"}`} onClick={() => setMenuOpen(false)}>
                   <span className="material-icons mr-3">history</span>
                   Audit History
+                </a>
+              </Link>
+              
+              <Link href="/account">
+                <a className={`flex items-center px-4 py-3 mt-1 rounded-lg ${isActive("/account") ? "bg-blue-700 text-white" : "text-neutral-300"}`} onClick={() => setMenuOpen(false)}>
+                  <span className="material-icons mr-3">person</span>
+                  Account
                 </a>
               </Link>
               

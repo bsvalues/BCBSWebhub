@@ -20,6 +20,8 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUserPassword(userId: number, hashedPassword: string): Promise<User | undefined>;
+  updateUserEmail(userId: number, email: string): Promise<User | undefined>;
   
   // Audit operations
   getAudits(filters?: Partial<Audit>): Promise<Audit[]>;
@@ -95,6 +97,38 @@ export class DatabaseStorage implements IStorage {
     
     const results = await db.insert(users).values(user).returning();
     return results[0];
+  }
+  
+  async updateUserPassword(userId: number, hashedPassword: string): Promise<User | undefined> {
+    // First check if the user exists
+    const existingUser = await this.getUser(userId);
+    if (!existingUser) return undefined;
+    
+    const results = await db
+      .update(users)
+      .set({ 
+        password: hashedPassword,
+        // Update last login timestamp when password is reset
+        lastLogin: new Date()
+      })
+      .where(eq(users.id, userId))
+      .returning();
+      
+    return results.length > 0 ? results[0] : undefined;
+  }
+  
+  async updateUserEmail(userId: number, email: string): Promise<User | undefined> {
+    // First check if the user exists
+    const existingUser = await this.getUser(userId);
+    if (!existingUser) return undefined;
+    
+    const results = await db
+      .update(users)
+      .set({ email })
+      .where(eq(users.id, userId))
+      .returning();
+      
+    return results.length > 0 ? results[0] : undefined;
   }
 
   // Audit operations

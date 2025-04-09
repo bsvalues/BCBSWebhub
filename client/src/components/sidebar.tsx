@@ -57,6 +57,13 @@ export default function Sidebar() {
           </a>
         </Link>
         
+        <Link href="/account">
+          <a className={`flex items-center px-4 py-2 mt-1 rounded-lg ${isActive("/account") ? "bg-blue-700 text-white" : "text-neutral-300 hover:bg-neutral-800"}`}>
+            <span className="material-icons mr-3">person</span>
+            Account
+          </a>
+        </Link>
+        
         <Link href="/settings">
           <a className={`flex items-center px-4 py-2 mt-1 rounded-lg ${isActive("/settings") ? "bg-blue-700 text-white" : "text-neutral-300 hover:bg-neutral-800"}`}>
             <span className="material-icons mr-3">settings</span>

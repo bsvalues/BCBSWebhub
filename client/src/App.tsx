@@ -7,6 +7,7 @@ import AuditQueue from "@/pages/audit-queue";
 import CreateAudit from "@/pages/create-audit";
 import Analytics from "@/pages/analytics";
 import AuditHistory from "@/pages/audit-history";
+import AccountManagement from "@/pages/account-management";
 import StyleDemo from "@/pages/style-demo";
 import ModernStyleDemo from "@/pages/modern-style-demo";
 import GISDashboard from "@/pages/gis-dashboard";
@@ -52,6 +53,7 @@ function AuthenticatedApp() {
             <Route path="/create-audit" component={CreateAudit} />
             <Route path="/analytics" component={Analytics} />
             <Route path="/audit-history" component={AuditHistory} />
+            <Route path="/account" component={AccountManagement} />
             <Route path="/modern-style-demo" component={ModernStyleDemo} />
             <Route path="/gis-dashboard" component={GISDashboard} />
             <Route component={NotFound} />
