@@ -192,12 +192,15 @@ export class BCBSLevyLeadAgent extends BaseAgent {
    * Handle a directive from the master lead
    */
   private async handleMasterLeadDirective(message: AgentMessage): Promise<void> {
-    const { commandType, ...params } = message.payload;
+    const { commandType, command, ...params } = message.payload;
     
-    this.logger(`Received master lead directive: ${commandType}`);
+    // Get appropriate command type
+    const effectiveCommand = commandType || command;
+    
+    this.logger(`Received master lead directive: ${effectiveCommand}`);
     
     // Process the directive based on type
-    switch (commandType) {
+    switch (effectiveCommand) {
       case 'update_architecture':
         await this.handleArchitectureUpdate(params);
         break;
@@ -210,14 +213,18 @@ export class BCBSLevyLeadAgent extends BaseAgent {
         await this.handleIntegrationPattern(params);
         break;
         
+      case 'register_with_master_lead':
+        await this.handleMasterLeadRegistration(params);
+        break;
+        
       default:
-        this.logger(`Unknown command type: ${commandType}`);
+        this.logger(`Unknown command type: ${effectiveCommand}`);
     }
     
     // Acknowledge receipt of directive
     this.sendResponseMessage(message, {
       status: 'success',
-      message: `Command ${commandType} acknowledged and being processed`
+      message: `Command ${effectiveCommand} acknowledged and being processed`
     });
   }
   
@@ -329,6 +336,61 @@ export class BCBSLevyLeadAgent extends BaseAgent {
       
       this.sendMessage(notificationMessage);
     }
+  }
+  
+  /**
+   * Handle registration with the master lead
+   */
+  private async handleMasterLeadRegistration(params: any): Promise<void> {
+    const { masterLeadId, domainAreas, priorityGoals } = params;
+    
+    this.logger(`Registered with Master Lead ${masterLeadId}`);
+    
+    // Store relationship with master lead for future communications
+    const masterLeadKey = `master_lead_${masterLeadId}`;
+    
+    // Update our configuration based on domain areas and priority goals
+    if (priorityGoals && priorityGoals.includes('tax_accuracy')) {
+      // Add additional calculation modes for improved accuracy
+      const additionalModes = ['progressive_rate', 'special_district'];
+      for (const mode of additionalModes) {
+        if (!this.settings.calculationModes.includes(mode)) {
+          this.settings.calculationModes.push(mode);
+        }
+      }
+    }
+    
+    if (priorityGoals && priorityGoals.includes('data_integration')) {
+      // Improve levy data sources support
+      const additionalSources = ['state_revenue_office', 'census_bureau'];
+      for (const source of additionalSources) {
+        if (!this.settings.levyRateSources.includes(source)) {
+          this.settings.levyRateSources.push(source);
+        }
+      }
+    }
+    
+    // Acknowledge registration by reporting capabilities back to master lead
+    const capabilitiesMessage: AgentMessage = {
+      messageId: AgentCommunicationBus.createMessageId(),
+      timestamp: new Date(),
+      source: this.id,
+      destination: masterLeadId,
+      eventType: MessageEventType.NOTIFICATION,
+      payload: {
+        notificationType: 'capabilities_report',
+        capabilities: {
+          taxYears: this.settings.taxYears,
+          levyRateSources: this.settings.levyRateSources,
+          taxingAuthorities: this.settings.taxingAuthorities,
+          calculationModes: this.settings.calculationModes
+        }
+      },
+      priority: MessagePriority.MEDIUM,
+      requiresResponse: false
+    };
+    
+    this.sendMessage(capabilitiesMessage);
   }
   
   /**
