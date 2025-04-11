@@ -117,9 +117,10 @@ export class BCBSMasterLeadAgent extends BaseAgent {
   }
   
   /**
-   * Register with specialized functional agents
+   * Register with specialized functional agents and component leads
    */
   private async registerWithSpecializedAgents(): Promise<void> {
+    // Register with all agents via broadcast
     const registrationMessage: AgentMessage = {
       messageId: AgentCommunicationBus.createMessageId(),
       timestamp: new Date(),
@@ -142,6 +143,40 @@ export class BCBSMasterLeadAgent extends BaseAgent {
     };
     
     this.sendMessage(registrationMessage);
+    
+    // Specifically register with component lead agents
+    await this.registerWithComponentLead(AgentType.BCBS_GISPRO_LEAD);
+    await this.registerWithComponentLead(AgentType.BCBS_LEVY_LEAD);
+    
+    // Add registration for other component leads when implemented
+    // await this.registerWithComponentLead(AgentType.BCBS_COST_APP_LEAD);
+    // await this.registerWithComponentLead(AgentType.BCBS_GEO_ASSESSMENT_LEAD);
+  }
+  
+  /**
+   * Register with a specific component lead agent
+   */
+  private async registerWithComponentLead(componentLeadType: AgentType): Promise<void> {
+    const registrationMessage: AgentMessage = {
+      messageId: AgentCommunicationBus.createMessageId(),
+      timestamp: new Date(),
+      source: this.id,
+      destination: componentLeadType,
+      eventType: MessageEventType.COMMAND,
+      payload: {
+        command: 'register_with_master_lead',
+        parameters: {
+          masterLeadId: this.id,
+          domainAreas: this.settings.domainAreas,
+          priorityGoals: this.settings.priorityGoals
+        }
+      },
+      priority: MessagePriority.HIGH,
+      requiresResponse: true
+    };
+    
+    this.sendMessage(registrationMessage);
+    this.logger(`Sent direct registration to ${componentLeadType}`);
   }
   
   /**

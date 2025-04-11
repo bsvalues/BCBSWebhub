@@ -182,12 +182,15 @@ export class BCBSGISProLeadAgent extends BaseAgent {
    * Handle a directive from the master lead
    */
   private async handleMasterLeadDirective(message: AgentMessage): Promise<void> {
-    const { commandType, ...params } = message.payload;
+    const { commandType, command, ...params } = message.payload;
     
-    this.logger(`Received master lead directive: ${commandType}`);
+    // Get appropriate command type
+    const effectiveCommand = commandType || command;
+    
+    this.logger(`Received master lead directive: ${effectiveCommand}`);
     
     // Process the directive based on type
-    switch (commandType) {
+    switch (effectiveCommand) {
       case 'update_architecture':
         await this.handleArchitectureUpdate(params);
         break;
@@ -200,14 +203,18 @@ export class BCBSGISProLeadAgent extends BaseAgent {
         await this.handleIntegrationPattern(params);
         break;
         
+      case 'register_with_master_lead':
+        await this.handleMasterLeadRegistration(params);
+        break;
+        
       default:
-        this.logger(`Unknown command type: ${commandType}`);
+        this.logger(`Unknown command type: ${effectiveCommand}`);
     }
     
     // Acknowledge receipt of directive
     this.sendResponseMessage(message, {
       status: 'success',
-      message: `Command ${commandType} acknowledged and being processed`
+      message: `Command ${effectiveCommand} acknowledged and being processed`
     });
   }
   
@@ -440,6 +447,56 @@ export class BCBSGISProLeadAgent extends BaseAgent {
     }
     
     return filteredSpec;
+  }
+  
+  /**
+   * Handle registration with the master lead
+   */
+  private async handleMasterLeadRegistration(params: any): Promise<void> {
+    const { masterLeadId, domainAreas, priorityGoals } = params;
+    
+    this.logger(`Registered with Master Lead ${masterLeadId}`);
+    
+    // Store relationship with master lead for future communications
+    const masterLeadKey = `master_lead_${masterLeadId}`;
+    
+    // Update our service configuration based on domain areas and priority goals
+    if (priorityGoals && priorityGoals.includes('geospatial_accuracy')) {
+      // Increase service levels for spatial accuracy
+      this.settings.serviceLevels['vector_validation'] = 
+        (this.settings.serviceLevels['vector_validation'] || 1) * 1.5;
+    }
+    
+    if (priorityGoals && priorityGoals.includes('data_integration')) {
+      // Improve data format support
+      const additionalFormats = ['geopackage', 'netcdf', 'las'];
+      for (const format of additionalFormats) {
+        if (!this.settings.supportedDataFormats.includes(format)) {
+          this.settings.supportedDataFormats.push(format);
+        }
+      }
+    }
+    
+    // Acknowledge registration by reporting capabilities back to master lead
+    const capabilitiesMessage: AgentMessage = {
+      messageId: AgentCommunicationBus.createMessageId(),
+      timestamp: new Date(),
+      source: this.id,
+      destination: masterLeadId,
+      eventType: MessageEventType.NOTIFICATION,
+      payload: {
+        notificationType: 'capabilities_report',
+        capabilities: {
+          supportedDataFormats: this.settings.supportedDataFormats,
+          spatialAnalysisCapabilities: this.settings.spatialAnalysisCapabilities,
+          serviceLevels: this.settings.serviceLevels
+        }
+      },
+      priority: MessagePriority.MEDIUM,
+      requiresResponse: false
+    };
+    
+    this.sendMessage(capabilitiesMessage);
   }
   
   /**
