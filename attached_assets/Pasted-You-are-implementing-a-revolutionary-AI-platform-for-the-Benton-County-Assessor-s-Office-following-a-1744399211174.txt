@@ -1,0 +1,85 @@
+You are implementing a revolutionary AI platform for the Benton County Assessor's Office following a precisely defined three-phase development approach. This system employs a multi-agent architecture ("AI Army") to transform property assessment operations while ensuring compliance with Washington State regulations.
+SYSTEM OVERVIEW
+This platform will:
+
+Validate and enhance property data quality with automated checks
+Generate accurate property valuations using AI-powered models
+Provide authoritative property tax information through specialized agents
+Automate critical workflows for clerical and appraisal staff
+Ensure strict compliance with Washington State assessment laws
+
+CURRENT DEVELOPMENT PHASE
+You are currently implementing Phase 2 of our strategic development plan:
+Phase 1 (COMPLETED):
+
+Comprehensive code audit of existing modules
+Refactoring for error handling and UI corrections
+Testing framework and CI/CD pipeline implementation
+Documentation improvements
+
+Phase 2 (CURRENT FOCUS):
+
+Development of the Data Quality & Compliance Module
+Creation of the AI Army prototype with agent framework
+Implementation of inter-agent communication protocol
+Development of at least two prototype agents (Data Quality and Compliance)
+
+Phase 3 (UPCOMING):
+
+UI/UX redesign and dashboard development
+Complete workflow automation integration
+Full agent system deployment
+End-to-end system testing and optimization
+
+TECHNICAL ARCHITECTURE
+The system architecture centers on a Master Control Program (MCP) that orchestrates specialized AI agents:
+
+Master Control Program:
+
+Central orchestration service for task delegation
+Inter-agent message routing and monitoring
+System-wide logging and state management
+
+
+AI Army Agents:
+
+Data Quality Agent: Validates property data integrity and flags anomalies
+Compliance Agent: Ensures adherence to Washington State regulations
+Valuation Agent: Calculates accurate property values using advanced models
+User Interaction Agent: Handles staff queries and interface interactions
+
+
+Core Infrastructure:
+
+Robust data pipelines for property information
+Secure database architecture with versioning
+Modern API framework for system integration
+Comprehensive testing suite for all components
+
+
+
+DATA STANDARDS AND REQUIREMENTS
+
+All property data must conform to Washington State Department of Revenue standards
+Validation rules must identify common assessment errors (boundary issues, classification errors)
+Tax calculations must follow Benton County's current mill rates and exemption rules
+All data operations must maintain strict audit trails for compliance
+
+IMPLEMENTATION PRIORITIES
+For the current phase, focus on implementing:
+
+First Priority: Data Quality & Compliance Module with validation rules
+Second Priority: AI Agent framework with inter-agent communication protocol
+Third Priority: Prototype agents (Data Quality and Compliance)
+Fourth Priority: Testing framework for all new components
+
+YOUR TASK
+Implement the critical components for Phase 2 with production-quality code that meets all testing, documentation, and performance requirements. Your code will establish the foundation for a system that revolutionizes government assessment operations through applied artificial intelligence.
+This main context provides the Replit AI Agent with:
+
+Clear understanding of the three-phase approach
+Current phase focus and priorities
+Technical architecture details
+Specific implementation priorities
+
+The context is structured to give the agent both the big picture and the immediate focus areas, which should guide it to produce code that aligns perfectly with your development roadmap

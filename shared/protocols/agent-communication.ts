@@ -1,266 +1,321 @@
-/**
- * Agent Communication Protocol
- * 
- * This module defines the message formats and communication patterns
- * for the multi-agent AI architecture. It enables standardized communication
- * between the Master Control Program (MCP) and specialized agents.
- */
+import { randomUUID } from "crypto";
 
-// Agent types in the system
+/**
+ * Agent Type Enumeration
+ * 
+ * Defines the types of agents in the AI Army architecture.
+ */
 export enum AgentType {
-  MCP = 'master_control_program',
-  DATA_VALIDATION = 'data_validation_agent',
-  VALUATION = 'valuation_agent',
-  USER_INTERACTION = 'user_interaction_agent',
-  TAX_INFORMATION = 'tax_information_agent',
-  WORKFLOW = 'workflow_agent',
-  LEGAL_COMPLIANCE = 'legal_compliance_agent'
+  MCP = "master_control_program",
+  DATA_VALIDATION = "data_validation_agent",
+  COMPLIANCE = "compliance_agent",
+  VALUATION = "valuation_agent",
+  USER_INTERACTION = "user_interaction_agent"
 }
 
-// Message types for inter-agent communication
+/**
+ * Message Type Enumeration
+ * 
+ * Defines the types of messages that can be exchanged between agents.
+ */
 export enum MessageType {
-  // Control messages
-  TASK_REQUEST = 'task_request',
-  TASK_RESPONSE = 'task_response',
-  TASK_UPDATE = 'task_update',
-  TASK_CANCEL = 'task_cancel',
+  // System messages
+  STATUS_UPDATE = "status_update",
+  STATUS_UPDATE_RESPONSE = "status_update_response",
+  ERROR_REPORT = "error_report",
+  AGENT_REGISTRATION = "agent_registration",
+  AGENT_REGISTRATION_RESPONSE = "agent_registration_response",
+  HEARTBEAT = "heartbeat",
+  SHUTDOWN = "shutdown",
   
-  // Data messages
-  DATA_REQUEST = 'data_request',
-  DATA_RESPONSE = 'data_response',
-  DATA_UPDATE = 'data_update',
-  DATA_VALIDATION_REQUEST = 'data_validation_request',
-  DATA_VALIDATION_RESPONSE = 'data_validation_response',
+  // Task management messages
+  TASK_REQUEST = "task_request",
+  TASK_RESPONSE = "task_response",
+  TASK_CANCEL = "task_cancel",
+  TASK_PROGRESS = "task_progress",
+  
+  // Validation messages
+  VALIDATION_REQUEST = "validation_request",
+  VALIDATION_RESPONSE = "validation_response",
   
   // Valuation messages
-  VALUATION_REQUEST = 'valuation_request',
-  VALUATION_RESPONSE = 'valuation_response',
-  COMPARABLE_REQUEST = 'comparable_request',
-  COMPARABLE_RESPONSE = 'comparable_response',
-  ANOMALY_DETECTION_REQUEST = 'anomaly_detection_request',
-  ANOMALY_DETECTION_RESPONSE = 'anomaly_detection_response',
+  VALUATION_REQUEST = "valuation_request",
+  VALUATION_RESPONSE = "valuation_response",
   
-  // Coordination messages
-  COORDINATION_REQUEST = 'coordination_request',
-  COORDINATION_RESPONSE = 'coordination_response',
+  // Compliance messages
+  COMPLIANCE_CHECK_REQUEST = "compliance_check_request",
+  COMPLIANCE_CHECK_RESPONSE = "compliance_check_response",
   
-  // System messages
-  HEARTBEAT = 'heartbeat',
-  STATUS_UPDATE = 'status_update',
-  ERROR = 'error',
-  LOG = 'log'
+  // User interaction messages
+  USER_QUERY_REQUEST = "user_query_request",
+  USER_QUERY_RESPONSE = "user_query_response",
+  
+  // Data exchange messages
+  DATA_REQUEST = "data_request",
+  DATA_RESPONSE = "data_response",
+  
+  // Custom message type
+  CUSTOM = "custom"
 }
 
-// Priority levels for message processing
+/**
+ * Priority Enumeration
+ * 
+ * Defines the priority levels for agent tasks and messages.
+ */
 export enum Priority {
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
-  CRITICAL = 'critical'
+  HIGH = 3,
+  MEDIUM = 2,
+  LOW = 1
 }
 
-// Status codes for task responses
-export enum StatusCode {
-  SUCCESS = 'success',
-  PARTIAL_SUCCESS = 'partial_success',
-  FAILURE = 'failure',
-  VALIDATION_ERROR = 'validation_error',
-  AUTHORIZATION_ERROR = 'authorization_error',
-  RESOURCE_ERROR = 'resource_error',
-  TIMEOUT = 'timeout',
-  CANCELLED = 'cancelled',
-  SYSTEM_ERROR = 'system_error'
-}
-
-// Standard message format for inter-agent communication
+/**
+ * Agent Message Interface
+ * 
+ * Defines the structure of messages exchanged between agents.
+ */
 export interface AgentMessage {
   messageId: string;
   timestamp: Date;
-  source: AgentType | string;
-  destination: AgentType | string;
+  source: string;
+  destination: string | 'broadcast';
   messageType: MessageType;
   priority: Priority;
-  payload: any;
   requiresResponse: boolean;
-  correlationId?: string; // For tracking related messages
-  expiresAt?: Date; // Optional timeout for message processing
-  routingInfo?: {
-    path?: AgentType[]; // Ordered list of agents that should process this message
-    visited?: AgentType[]; // Agents that have already processed the message
-    nextAgent?: AgentType; // Next agent to process the message
+  correlationId?: string;
+  expiresAt?: Date;
+  payload: any;
+}
+
+/**
+ * Task Interface
+ * 
+ * Defines the structure of tasks that agents can execute.
+ */
+export interface Task {
+  id: string;
+  type: string;
+  priority: Priority;
+  parameters: any;
+  createdAt: Date;
+  assignedAt?: Date;
+  completedAt?: Date;
+  result?: any;
+  error?: any;
+}
+
+/**
+ * Agent Status
+ * 
+ * Defines the status information that agents provide about themselves.
+ */
+export interface AgentStatus {
+  status: 'initializing' | 'running' | 'paused' | 'stopping' | 'stopped' | 'error';
+  uptime: number;
+  taskCount: {
+    pending: number;
+    processing: number;
+    completed: number;
+    failed: number;
   };
-}
-
-// Task message format
-export interface TaskMessage extends AgentMessage {
-  payload: {
-    taskId: string;
-    taskType: string;
-    parameters: any;
-    context?: any;
-    requiredCapabilities?: string[];
-    timeoutSeconds?: number;
+  lastActiveTime: Date;
+  metrics: {
+    [key: string]: any;
   };
+  error?: any;
 }
 
-// Task response message format
-export interface TaskResponseMessage extends AgentMessage {
-  payload: {
-    taskId: string;
-    status: StatusCode;
-    result?: any;
-    errorDetails?: any;
-    metrics?: {
-      processingTimeMs: number;
-      resourceUsage?: any;
-    };
-    warnings?: string[];
-  };
-}
-
-// Data validation message format
-export interface DataValidationMessage extends AgentMessage {
-  payload: {
-    dataId: string;
-    dataType: string;
-    data: any;
-    validationRules?: string[];
-    strictMode?: boolean;
-  };
-}
-
-// Valuation request message format
-export interface ValuationRequestMessage extends AgentMessage {
-  payload: {
-    propertyId: number;
-    parcelNumber?: string;
-    valuationDate: Date;
-    valuationContext?: {
-      purpose: 'assessment' | 'market' | 'insurance' | 'refinance';
-      assessmentYear?: number;
-      useComparables?: boolean;
-      useHistoricalTrends?: boolean;
-      detectAnomalies?: boolean;
-    };
-  };
-}
-
-// Message handler type
-export type MessageHandler = (message: AgentMessage) => void | Promise<void>;
-
-// Subscription object returned when subscribing to messages
-export interface Subscription {
-  unsubscribe: () => void;
-}
-
-// Communication bus for agents to exchange messages
-export class AgentCommunicationBus {
-  private messageHandlers: Map<string, MessageHandler[]>;
-  private logger: (message: string, data?: any) => void;
+/**
+ * Agent Interface
+ * 
+ * Defines the common interface that all agents must implement.
+ */
+export interface Agent {
+  type: string;
+  capabilities: string[];
+  running: boolean;
   
-  constructor(logger?: (message: string, data?: any) => void) {
-    this.messageHandlers = new Map();
-    this.logger = logger || console.log;
+  initialize(): Promise<void>;
+  shutdown(): Promise<void>;
+  getStatus(): AgentStatus;
+  sendMessage(message: AgentMessage): void;
+}
+
+/**
+ * Validation Request Message
+ * 
+ * Defines the structure of a validation request message.
+ */
+export interface ValidationRequestMessage {
+  propertyId?: number;
+  property?: any;
+  validateFields?: string[];
+  validationRules?: string[];
+}
+
+/**
+ * Valuation Request Message
+ * 
+ * Defines the structure of a valuation request message.
+ */
+export interface ValuationRequestMessage {
+  propertyId?: number;
+  property?: any;
+  assessmentYear: number;
+  options?: {
+    useComparables?: boolean;
+    method?: 'cost' | 'income' | 'market' | 'hybrid';
+    includeTrends?: boolean;
+  };
+}
+
+/**
+ * Compliance Check Request Message
+ * 
+ * Defines the structure of a compliance check request message.
+ */
+export interface ComplianceCheckRequestMessage {
+  propertyId?: number;
+  property?: any;
+  assessmentYear?: number;
+  categories?: string[];
+  regulationIds?: string[];
+}
+
+/**
+ * User Query Request Message
+ * 
+ * Defines the structure of a user query request message.
+ */
+export interface UserQueryRequestMessage {
+  userId: number;
+  query: string;
+  context?: any;
+}
+
+/**
+ * Agent Communication Bus
+ * 
+ * Provides a publish-subscribe mechanism for inter-agent communication.
+ */
+export class AgentCommunicationBus {
+  private subscribers: Map<string, ((message: AgentMessage) => void)[]> = new Map();
+  private messageLog: AgentMessage[] = [];
+  private readonly MAX_LOG_SIZE = 1000;
+  
+  /**
+   * Generate a unique message ID
+   */
+  public static createMessageId(): string {
+    return randomUUID();
   }
   
   /**
    * Publish a message to the communication bus
    */
   public publish(message: AgentMessage): void {
-    // Log message for audit trail
+    // Log the message
     this.logMessage(message);
     
-    // Deliver to handlers for the specific destination
-    const specificHandlers = this.messageHandlers.get(message.destination) || [];
-    specificHandlers.forEach(handler => {
-      try {
-        handler(message);
-      } catch (error) {
-        this.logger(`Error in message handler for ${message.destination}:`, error);
+    // If it's a broadcast message, send to all subscribers
+    if (message.destination === 'broadcast') {
+      for (const [agentType, handlers] of this.subscribers.entries()) {
+        if (agentType !== message.source) {
+          for (const handler of handlers) {
+            try {
+              handler(message);
+            } catch (error) {
+              console.error(`Error in message handler for ${agentType}:`, error);
+            }
+          }
+        }
       }
-    });
+      return;
+    }
     
-    // Deliver to wildcard handlers (subscribers to all messages)
-    const wildcardHandlers = this.messageHandlers.get('*') || [];
-    wildcardHandlers.forEach(handler => {
-      try {
-        handler(message);
-      } catch (error) {
-        this.logger(`Error in wildcard message handler:`, error);
+    // Otherwise, send to the specific destination
+    const handlers = this.subscribers.get(message.destination);
+    if (handlers && handlers.length > 0) {
+      for (const handler of handlers) {
+        try {
+          handler(message);
+        } catch (error) {
+          console.error(`Error in message handler for ${message.destination}:`, error);
+        }
       }
-    });
+    }
   }
   
   /**
-   * Subscribe to messages for a specific destination or all messages using '*'
+   * Subscribe to messages for a specific agent type
    */
-  public subscribe(destination: string, handler: MessageHandler): Subscription {
-    const handlers = this.messageHandlers.get(destination) || [];
-    handlers.push(handler);
-    this.messageHandlers.set(destination, handlers);
+  public subscribe(agentType: string, handler: (message: AgentMessage) => void): (() => void) {
+    if (!this.subscribers.has(agentType)) {
+      this.subscribers.set(agentType, []);
+    }
     
-    // Return subscription object for unsubscribing
-    return {
-      unsubscribe: () => this.unsubscribe(destination, handler)
+    const handlers = this.subscribers.get(agentType)!;
+    handlers.push(handler);
+    
+    // Return unsubscribe function
+    return () => {
+      this.unsubscribe(agentType, handler);
     };
   }
   
   /**
    * Unsubscribe from messages
    */
-  private unsubscribe(destination: string, handler: MessageHandler): void {
-    const handlers = this.messageHandlers.get(destination) || [];
+  private unsubscribe(agentType: string, handler: (message: AgentMessage) => void): void {
+    if (!this.subscribers.has(agentType)) {
+      return;
+    }
+    
+    const handlers = this.subscribers.get(agentType)!;
     const index = handlers.indexOf(handler);
     
     if (index !== -1) {
       handlers.splice(index, 1);
-      this.messageHandlers.set(destination, handlers);
+    }
+    
+    // Clean up empty subscribers
+    if (handlers.length === 0) {
+      this.subscribers.delete(agentType);
     }
   }
   
   /**
-   * Log message for audit and debugging purposes
+   * Log a message
    */
   private logMessage(message: AgentMessage): void {
-    // Don't log full payload of large messages or heartbeats
-    const logLevel = message.messageType === MessageType.HEARTBEAT ? 'debug' : 'info';
+    this.messageLog.push(message);
     
-    const logMessage = {
-      ...message,
-      payload: message.messageType === MessageType.HEARTBEAT ? '(heartbeat data)' : 
-               (typeof message.payload === 'object' && Object.keys(message.payload).length > 10) ? 
-               '(large payload)' : message.payload
-    };
-    
-    this.logger(`[${logLevel}] Agent message ${message.messageId}: ${message.source} -> ${message.destination} (${message.messageType})`, logMessage);
+    // Trim log if it gets too large
+    if (this.messageLog.length > this.MAX_LOG_SIZE) {
+      this.messageLog = this.messageLog.slice(-this.MAX_LOG_SIZE);
+    }
   }
   
   /**
-   * Helper to create a message ID
+   * Get recent messages (mainly for debugging)
    */
-  public static createMessageId(): string {
-    return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  public getRecentMessages(count: number = 100): AgentMessage[] {
+    return this.messageLog.slice(-count);
   }
   
   /**
-   * Helper to generate an error response for a message
+   * Filter message log to find related messages
    */
-  public static createErrorResponse(originalMessage: AgentMessage, error: any): AgentMessage {
-    return {
-      messageId: AgentCommunicationBus.createMessageId(),
-      timestamp: new Date(),
-      source: originalMessage.destination,
-      destination: originalMessage.source,
-      messageType: MessageType.ERROR,
-      priority: Priority.HIGH,
-      requiresResponse: false,
-      correlationId: originalMessage.messageId,
-      payload: {
-        error: error.message || String(error),
-        errorCode: error.code || 'UNKNOWN_ERROR',
-        originalMessageId: originalMessage.messageId,
-        originalMessageType: originalMessage.messageType
-      }
-    };
+  public getRelatedMessages(messageId: string): AgentMessage[] {
+    return this.messageLog.filter(
+      m => m.messageId === messageId || m.correlationId === messageId
+    );
+  }
+  
+  /**
+   * Clear all subscriptions
+   */
+  public clearSubscriptions(): void {
+    this.subscribers.clear();
   }
 }
