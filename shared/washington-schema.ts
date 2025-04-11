@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, numeric, timestamp, boolean, jsonb, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, numeric, timestamp, boolean, jsonb, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { users } from "./schema";
@@ -114,11 +114,6 @@ export const propertyValuationHistory = pgTable("property_valuation_history", {
   changeReason: text("change_reason"),
   updatedBy: integer("updated_by").references(() => users.id),
   updatedAt: timestamp("updated_at").defaultNow(),
-  
-  // Unique constraint to prevent duplicate years for same property
-  unique: {
-    propertyYearIdx: [propertyId, assessmentYear]
-  }
 });
 
 // Data quality metrics (collected over time)

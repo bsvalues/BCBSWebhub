@@ -1,6 +1,6 @@
 import { db } from "../db";
 import { properties, dataQualitySnapshots, InsertDataQualitySnapshot } from "@shared/washington-schema";
-import { avg, count, sql } from "drizzle-orm";
+import { avg, count, sql, eq } from "drizzle-orm";
 
 /**
  * Interface for data quality metrics
@@ -72,12 +72,12 @@ export class DataQualityService {
     
     // Check for null values in critical fields
     const nullCounts = await db.select({
-      parcelNumberNulls: count(properties.parcelNumber.isNull()),
-      propertyTypeNulls: count(properties.propertyType.isNull()),
-      landValueNulls: count(properties.landValue.isNull()),
-      improvementValueNulls: count(properties.improvementValue.isNull()),
-      totalValueNulls: count(properties.totalValue.isNull()),
-      assessmentYearNulls: count(properties.assessmentYear.isNull()),
+      parcelNumberNulls: count(sql`CASE WHEN ${properties.parcelNumber} IS NULL THEN 1 END`),
+      propertyTypeNulls: count(sql`CASE WHEN ${properties.propertyType} IS NULL THEN 1 END`),
+      landValueNulls: count(sql`CASE WHEN ${properties.landValue} IS NULL THEN 1 END`),
+      improvementValueNulls: count(sql`CASE WHEN ${properties.improvementValue} IS NULL THEN 1 END`),
+      totalValueNulls: count(sql`CASE WHEN ${properties.totalValue} IS NULL THEN 1 END`),
+      assessmentYearNulls: count(sql`CASE WHEN ${properties.assessmentYear} IS NULL THEN 1 END`),
     }).from(properties);
     
     // Check for inconsistent values (Washington rules)
@@ -139,7 +139,7 @@ export class DataQualityService {
     const consistencyScore = this.calculateComponentScore(consistency);
     
     // Calculate timeliness score based on data age
-    const avgAge = dataAge[0].avgAge || 0;
+    const avgAge = Number(dataAge[0].avgAge || 0);
     const timelinessScore = avgAge < 30 ? 1.0 : 
                            avgAge < 90 ? 0.8 : 
                            avgAge < 180 ? 0.6 : 
@@ -245,11 +245,11 @@ export class DataQualityService {
    */
   private async saveDataQualitySnapshot(metrics: DataQualityMetrics): Promise<void> {
     const snapshot: InsertDataQualitySnapshot = {
-      completenessScore: metrics.completenessScore,
-      accuracyScore: metrics.accuracyScore,
-      consistencyScore: metrics.consistencyScore,
-      timelinessScore: metrics.timelinessScore,
-      overallScore: metrics.overallScore,
+      completenessScore: String(metrics.completenessScore),
+      accuracyScore: String(metrics.accuracyScore),
+      consistencyScore: String(metrics.consistencyScore),
+      timelinessScore: String(metrics.timelinessScore),
+      overallScore: String(metrics.overallScore),
       metrics: metrics,
       issueCounts: {
         totalIssues: metrics.recordsWithIssues,
@@ -304,9 +304,102 @@ export class DataQualityService {
   }
   
   /**
+   * Analyze data quality - main interface for external calls
+   */
+  public async analyzeDataQuality(options: { 
+    limit?: number; 
+    offset?: number; 
+    propertyId?: number;
+    includeMetrics?: boolean;
+    includeFieldAnalysis?: boolean;
+    thresholds?: Record<string, number>;
+  }): Promise<{
+    metrics: DataQualityMetrics;
+    fieldAnalysis?: Record<string, any>;
+    recommendations: string[];
+    overallScore: number;
+  }> {
+    // Calculate data quality metrics
+    const metrics = await this.calculateDataQualityMetrics();
+    
+    // Generate recommendations
+    const recommendations = this.generateRecommendations({
+      qualityAnalysis: metrics,
+      analysisType: 'all',
+      propertyId: options.propertyId
+    });
+    
+    // If requested, generate field-level analysis
+    let fieldAnalysis: Record<string, any> | undefined;
+    if (options.includeFieldAnalysis) {
+      fieldAnalysis = await this.analyzeFieldStatistics(options.propertyId);
+    }
+    
+    return {
+      metrics,
+      fieldAnalysis,
+      recommendations,
+      overallScore: metrics.overallScore
+    };
+  }
+  
+  /**
+   * Analyze field-level statistics
+   */
+  private async analyzeFieldStatistics(propertyId?: number): Promise<Record<string, any>> {
+    // Build query with property filter if needed
+    let query = db.select().from(properties);
+    if (propertyId) {
+      query = query.where(eq(properties.id, propertyId));
+    }
+    
+    // Execute query
+    const results = await query.limit(1000); // Limit for performance
+    
+    // Calculate field-level statistics
+    const analysis: Record<string, any> = {};
+    
+    // Skip if no results
+    if (results.length === 0) {
+      return analysis;
+    }
+    
+    // Analyze each field
+    const sampleProperty = results[0];
+    for (const field in sampleProperty) {
+      // Count distinct values
+      const distinctValues = new Set();
+      for (const property of results) {
+        if (property[field] !== null && property[field] !== undefined) {
+          distinctValues.add(property[field]);
+        }
+      }
+      
+      // Calculate nulls
+      const nullCount = results.filter(p => p[field] === null || p[field] === undefined).length;
+      
+      // Add to analysis
+      analysis[field] = {
+        distinctValueCount: distinctValues.size,
+        nullCount,
+        nullPercentage: (nullCount / results.length) * 100,
+        hasVariety: distinctValues.size > 1
+      };
+    }
+    
+    return analysis;
+  }
+  
+  /**
    * Generate data quality recommendations based on current metrics
    */
-  public generateRecommendations(metrics: DataQualityMetrics): string[] {
+  public generateRecommendations(params: { 
+    qualityAnalysis: any; 
+    analysisType?: string; 
+    propertyId?: number;
+  }): string[] {
+    // Extract metrics from the quality analysis
+    const metrics = params.qualityAnalysis.metrics || params.qualityAnalysis;
     const recommendations: string[] = [];
     
     // Add recommendations based on component scores

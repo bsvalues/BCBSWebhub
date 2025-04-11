@@ -1,17 +1,34 @@
 import { BaseAgent, Task } from "./base-agent";
-import { PropertyValidator } from "../validators/property-validator";
+import { PropertyDataValidator } from "../validators/property-validator";
 import { DataQualityService } from "../services/data-quality";
 import { 
   AgentType, 
   AgentMessage, 
   MessageType, 
-  StatusCode, 
-  AgentCommunicationBus,
-  ValidationRequestMessage
+  Priority, 
+  AgentCommunicationBus
 } from "@shared/protocols/agent-communication";
 import { db } from "../db";
-import { properties, ValidationResult } from "@shared/washington-schema";
+import { properties } from "@shared/washington-schema";
 import { eq } from "drizzle-orm";
+
+// Define the ValidationResult interface locally since it's not exported from washington-schema
+interface ValidationResult {
+  field: string;
+  isValid: boolean;
+  rule: string;
+  message: string;
+  severity: 'error' | 'warning' | 'info';
+}
+
+// Define ValidationRequestMessage interface
+interface ValidationRequestMessage extends AgentMessage {
+  payload: {
+    propertyId?: number;
+    property?: any;
+    validateFields?: string[];
+  };
+}
 
 /**
  * Data Validation Agent
@@ -21,7 +38,7 @@ import { eq } from "drizzle-orm";
  * and making recommendations for data corrections.
  */
 export class DataValidationAgent extends BaseAgent {
-  private validator: PropertyValidator;
+  private validator: PropertyDataValidator;
   private dataQualityService: DataQualityService;
   
   constructor(communicationBus: AgentCommunicationBus) {
@@ -37,7 +54,7 @@ export class DataValidationAgent extends BaseAgent {
       communicationBus
     );
     
-    this.validator = new PropertyValidator();
+    this.validator = new PropertyDataValidator();
     this.dataQualityService = new DataQualityService();
   }
   
@@ -328,15 +345,9 @@ export class DataValidationAgent extends BaseAgent {
       propertyId
     });
     
-    // Generate recommendations based on data quality issues
-    const recommendations = await this.dataQualityService.generateRecommendations({
-      qualityAnalysis,
-      analysisType,
-      propertyId
-    });
-    
+    // Recommendations are already included in the quality analysis response
     return {
-      recommendations,
+      recommendations: qualityAnalysis.recommendations,
       analysisType,
       propertyId,
       qualityScore: qualityAnalysis.overallScore,
