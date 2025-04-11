@@ -184,7 +184,7 @@ export class ValuationAgent extends BaseAgent {
     } catch (error) {
       // Send error response
       const errorResponse = createErrorResponse(message, 'valuation_error', (error as Error).message);
-      this.communicationBus.sendMessage(errorResponse);
+      this.safeSendMessage(errorResponse);
     }
   }
   
@@ -207,11 +207,11 @@ export class ValuationAgent extends BaseAgent {
       };
       
       const response = createSuccessResponse(message, responsePayload);
-      this.communicationBus.sendMessage(response);
+      this.safeSendMessage(response);
     } catch (error) {
       // Send error response
       const errorResponse = createErrorResponse(message, 'comparable_error', (error as Error).message);
-      this.communicationBus.sendMessage(errorResponse);
+      this.safeSendMessage(errorResponse);
     }
   }
   
