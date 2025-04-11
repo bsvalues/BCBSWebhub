@@ -1,48 +1,31 @@
+/**
+ * Data Validation Agent
+ * 
+ * Specialized agent responsible for validating property data according to
+ * Washington State rules and regulations, detecting data quality issues,
+ * and making recommendations for data corrections.
+ */
+
 import { BaseAgent } from "./base-agent";
-import { PropertyDataValidator } from "../validators/property-validator";
+import { PropertyDataValidator, ValidationResult } from "../validators/property-validator";
 import { DataQualityService } from "../services/data-quality";
-import { 
-  AgentCommunicationBus,
-  AgentType,
-  AgentStatus,
-  Task,
-  TaskStatus
-} from "../../shared/protocols/agent-communication";
-import {
-  AgentMessage,
-  MessageEventType,
-  MessagePriority,
-  createMessage,
-  createSuccessResponse,
-  createErrorResponse
-} from "../../shared/protocols/message-protocol";
 import { db } from "../db";
 import { properties } from "@shared/washington-schema";
 import { eq } from "drizzle-orm";
-
-// Define the ValidationResult interface locally since it's not exported from washington-schema
-interface ValidationResult {
-  field: string;
-  isValid: boolean;
-  rule: string;
-  message: string;
-  severity: 'error' | 'warning' | 'info';
-}
-
-// Define a custom message type enum to extend the base message types
-enum ValidationMessageType {
-  VALIDATION_REQUEST = 'VALIDATION_REQUEST',
-  VALIDATION_RESPONSE = 'VALIDATION_RESPONSE'
-}
-
-// Define ValidationRequestMessage interface
-interface ValidationRequestMessage extends AgentMessage {
-  payload: {
-    propertyId?: number;
-    property?: any;
-    validateFields?: string[];
-  };
-}
+import { 
+  AgentCommunicationBus,
+  AgentStatus,
+  AgentType,
+  Task
+} from "@shared/protocols/agent-communication";
+import {
+  AgentMessage,
+  MessageEventType,
+  ValidationRequestMessage,
+  createMessage,
+  createErrorResponse,
+  createSuccessResponse
+} from "@shared/protocols/message-protocol";
 
 /**
  * Data Validation Agent
@@ -54,12 +37,39 @@ interface ValidationRequestMessage extends AgentMessage {
 export class DataValidationAgent extends BaseAgent {
   private validator: PropertyDataValidator;
   private dataQualityService: DataQualityService;
+  private validationRulesVersion: string;
+  private validationStats: {
+    propertiesValidated: number;
+    passedValidation: number;
+    failedValidation: number;
+    criticalErrors: number;
+    lastProcessedAt: Date | null;
+    avgProcessingTimeMs: number;
+    validationsByType: Record<string, number>;
+  };
   
   constructor(agentId: string, communicationBus: AgentCommunicationBus, settings: Record<string, any> = {}) {
     super(agentId, communicationBus, settings);
     
     this.validator = new PropertyDataValidator();
     this.dataQualityService = new DataQualityService();
+    this.validationRulesVersion = this.validator.rulesVersion;
+    
+    // Initialize validation statistics
+    this.validationStats = {
+      propertiesValidated: 0,
+      passedValidation: 0,
+      failedValidation: 0,
+      criticalErrors: 0,
+      lastProcessedAt: null,
+      avgProcessingTimeMs: 0,
+      validationsByType: {
+        single: 0,
+        batch: 0,
+        dataQuality: 0,
+        recommendation: 0
+      }
+    };
   }
   
   /**
@@ -76,13 +86,50 @@ export class DataValidationAgent extends BaseAgent {
           'property_validation',
           'data_quality_analysis',
           'recommendation_generation',
-          'batch_validation'
-        ]
+          'batch_validation',
+          'washington_compliance_validation',
+          'benton_county_parcel_validation'
+        ],
+        metadata: {
+          rulesVersion: this.validationRulesVersion,
+          supportedPropertyTypes: [
+            'residential', 'commercial', 'industrial', 
+            'agricultural', 'timber', 'open_space', 'other'
+          ],
+          validationRules: [
+            'WA_PARCEL_FORMAT',
+            'WA_VALUE_CALCULATION',
+            'WA_ASSESSMENT_YEAR',
+            'WA_EXEMPTION_DATA',
+            'WA_EXEMPTION_CALCULATION',
+            'WA_LAND_USE_COMPATIBILITY',
+            'WA_PHYSICAL_CHARACTERISTICS',
+            'WA_ZIP_CODE_FORMAT'
+          ]
+        }
       }
     );
     
-    // Initialize validator if needed
-    // No special initialization needed for now
+    // Register message handlers for validation requests
+    this.messageHandlers.set(MessageEventType.VALIDATION_REQUEST, this.handleValidationRequest.bind(this));
+    
+    // Log initialization
+    console.info('Data Validation Agent initialized with Washington State rules version ' + this.validationRulesVersion);
+    
+    // Notify the component lead that we're ready
+    await this.sendMessage(
+      AgentType.BCBS_GISPRO_LEAD,
+      MessageEventType.STATUS_UPDATE,
+      {
+        status: AgentStatus.READY,
+        agentType: AgentType.DATA_VALIDATION,
+        capabilities: [
+          'property_validation',
+          'data_quality_analysis',
+          'recommendation_generation'
+        ]
+      }
+    );
   }
   
   /**
@@ -96,13 +143,31 @@ export class DataValidationAgent extends BaseAgent {
         MessageEventType.STATUS_UPDATE,
         {
           status: AgentStatus.SHUTTING_DOWN,
-          metrics: this.getStatusMetrics()
+          metrics: {
+            ...this.getStatusMetrics(),
+            validationStats: this.validationStats
+          }
         }
       );
     } catch (error) {
       // If MCP is not available, just log the shutdown
+      console.warn('Could not send shutdown notification to MCP');
       // No need to rethrow since we're shutting down anyway
     }
+  }
+  
+  /**
+   * Override the message handler to handle validation-specific messages
+   */
+  protected async handleMessage(message: AgentMessage): Promise<void> {
+    // Check for specialized event types
+    if (message.eventType === MessageEventType.VALIDATION_REQUEST) {
+      await this.handleValidationRequest(message);
+      return;
+    }
+    
+    // Handle all other event types with parent implementation
+    await super.handleMessage(message);
   }
   
   /**
@@ -302,9 +367,9 @@ export class DataValidationAgent extends BaseAgent {
    * Validate multiple properties in a batch
    */
   private async validatePropertyBatch(params: { propertyIds?: number[], properties?: any[] }): Promise<any> {
-    const { propertyIds, properties } = params;
+    const { propertyIds, properties: propArray } = params;
     
-    if (!propertyIds && !properties) {
+    if (!propertyIds && !propArray) {
       throw new Error("Either propertyIds or properties array is required for batch validation");
     }
     
@@ -323,8 +388,8 @@ export class DataValidationAgent extends BaseAgent {
           propertiesToValidate.push(results[0]);
         }
       }
-    } else if (properties && properties.length > 0) {
-      propertiesToValidate = properties;
+    } else if (propArray && propArray.length > 0) {
+      propertiesToValidate = propArray;
     }
     
     // Validate each property
@@ -340,7 +405,7 @@ export class DataValidationAgent extends BaseAgent {
             summary: result.summary,
             details: result.results
           };
-        } catch (error) {
+        } catch (error: any) {
           return {
             propertyId: property.id,
             parcelNumber: property.parcelNumber,
@@ -363,8 +428,8 @@ export class DataValidationAgent extends BaseAgent {
       .filter(r => r.success && r.details)
       .forEach(result => {
         result.details
-          .filter(d => d.severity === "error")
-          .forEach(detail => {
+          .filter((d: any) => d.severity === "error")
+          .forEach((detail: any) => {
             const errorKey = `${detail.field}.${detail.rule}`;
             errorSummary[errorKey] = (errorSummary[errorKey] || 0) + 1;
           });

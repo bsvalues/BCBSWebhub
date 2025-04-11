@@ -22,7 +22,13 @@ export enum MessageEventType {
   COMPARABLE_REQUEST = 'COMPARABLE_REQUEST',
   COMPARABLE_RESPONSE = 'COMPARABLE_RESPONSE',
   ANOMALY_DETECTION_REQUEST = 'ANOMALY_DETECTION_REQUEST',
-  ANOMALY_DETECTION_RESPONSE = 'ANOMALY_DETECTION_RESPONSE'
+  ANOMALY_DETECTION_RESPONSE = 'ANOMALY_DETECTION_RESPONSE',
+  
+  // Specialized validation message types
+  VALIDATION_REQUEST = 'VALIDATION_REQUEST',
+  VALIDATION_RESPONSE = 'VALIDATION_RESPONSE',
+  DATA_QUALITY_REQUEST = 'DATA_QUALITY_REQUEST',
+  DATA_QUALITY_RESPONSE = 'DATA_QUALITY_RESPONSE'
 }
 
 // Message priority levels
@@ -134,6 +140,53 @@ export interface AnomalyDetectionResponsePayload {
   [key: string]: any;
 }
 
+// Validation request payload
+export interface ValidationRequestPayload {
+  propertyId?: number;
+  property?: any;
+  validateFields?: string[];
+  validationRules?: string[];
+  validateComplianceOnly?: boolean;
+  [key: string]: any;
+}
+
+// Validation response payload
+export interface ValidationResponsePayload {
+  propertyId?: number;
+  parcelNumber?: string;
+  isValid: boolean;
+  validationResults: any[];
+  validationSummary: {
+    errorCount: number;
+    warningCount: number;
+    errorFields: string[];
+    warningFields: string[];
+  };
+  timestamp: Date;
+  [key: string]: any;
+}
+
+// Data quality request payload
+export interface DataQualityRequestPayload {
+  limit?: number;
+  offset?: number;
+  propertyId?: number;
+  includeMetrics?: boolean;
+  includeFieldAnalysis?: boolean;
+  thresholds?: Record<string, number>;
+  [key: string]: any;
+}
+
+// Data quality response payload
+export interface DataQualityResponsePayload {
+  metrics: any;
+  recommendations: string[];
+  overallScore: number;
+  fieldAnalysis?: Record<string, any>;
+  timestamp: Date;
+  [key: string]: any;
+}
+
 // Union type for all possible message payloads
 export type MessagePayload = 
   | CommandPayload 
@@ -147,7 +200,11 @@ export type MessagePayload =
   | ComparableRequestPayload
   | ComparableResponsePayload
   | AnomalyDetectionRequestPayload
-  | AnomalyDetectionResponsePayload;
+  | AnomalyDetectionResponsePayload
+  | ValidationRequestPayload
+  | ValidationResponsePayload
+  | DataQualityRequestPayload
+  | DataQualityResponsePayload;
 
 // The main message interface
 export interface AgentMessage {
@@ -307,4 +364,26 @@ export interface AnomalyDetectionRequestMessage extends AgentMessage {
 export interface AnomalyDetectionResponseMessage extends AgentMessage {
   eventType: MessageEventType.ANOMALY_DETECTION_RESPONSE;
   payload: AnomalyDetectionResponsePayload;
+}
+
+// Specialized message types for Data Validation Agent
+
+export interface ValidationRequestMessage extends AgentMessage {
+  eventType: MessageEventType.VALIDATION_REQUEST;
+  payload: ValidationRequestPayload;
+}
+
+export interface ValidationResponseMessage extends AgentMessage {
+  eventType: MessageEventType.VALIDATION_RESPONSE;
+  payload: ValidationResponsePayload;
+}
+
+export interface DataQualityRequestMessage extends AgentMessage {
+  eventType: MessageEventType.DATA_QUALITY_REQUEST;
+  payload: DataQualityRequestPayload;
+}
+
+export interface DataQualityResponseMessage extends AgentMessage {
+  eventType: MessageEventType.DATA_QUALITY_RESPONSE;
+  payload: DataQualityResponsePayload;
 }

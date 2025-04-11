@@ -38,6 +38,11 @@ export enum AgentType {
   USER_INTERACTION = 'USER_INTERACTION', // User Interaction Agent
   NOTIFICATION = 'NOTIFICATION',    // Notification Agent
   
+  // Additional specialized agents
+  DATA_QUALITY = 'DATA_QUALITY',    // Data Quality Agent
+  COMPLIANCE_AGENT = 'COMPLIANCE_AGENT', // Compliance Validation Agent 
+  VALUATION_AGENT = 'VALUATION_AGENT', // Specialized Valuation Agent
+  
   // Assessment Calculation Agents
   PROPERTY_ATTRIBUTE = 'PROPERTY_ATTRIBUTE', // Property attribute processing
   LOCATION_FACTOR = 'LOCATION_FACTOR',       // Location factor analysis

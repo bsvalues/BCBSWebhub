@@ -423,12 +423,19 @@ export class PropertyDataValidator {
     const errors = results.filter(r => !r.isValid && r.severity === 'error');
     const warnings = results.filter(r => !r.isValid && r.severity === 'warning');
     
+    // Create unique field arrays without using Set spreading
+    const errorFieldsSet = new Set<string>();
+    const warningFieldsSet = new Set<string>();
+    
+    errors.forEach(e => errorFieldsSet.add(e.field));
+    warnings.forEach(w => warningFieldsSet.add(w.field));
+    
     return {
       isValid: errors.length === 0,
       errorCount: errors.length,
       warningCount: warnings.length,
-      errorFields: [...new Set(errors.map(e => e.field))],
-      warningFields: [...new Set(warnings.map(w => w.field))]
+      errorFields: Array.from(errorFieldsSet),
+      warningFields: Array.from(warningFieldsSet)
     };
   }
 }
