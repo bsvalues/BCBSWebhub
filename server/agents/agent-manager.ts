@@ -55,6 +55,18 @@ export class AgentManager {
   }
   
   /**
+   * Safely send a message through the communication bus
+   * Similar to BaseAgent's safeSendMessage but implemented directly in AgentManager
+   */
+  private safeSendMessage(message: any): void {
+    if (typeof this.communicationBus.sendMessage === 'function') {
+      this.communicationBus.sendMessage(message);
+    } else {
+      logger.warn(`AgentManager: sendMessage not available on communication bus`);
+    }
+  }
+  
+  /**
    * Initialize the agent manager
    */
   public async initialize(): Promise<void> {
@@ -210,7 +222,7 @@ export class AgentManager {
             }
           );
           
-          this.communicationBus.sendMessage(message);
+          this.safeSendMessage(message);
         }
       }
       
@@ -247,7 +259,7 @@ export class AgentManager {
             }
           );
           
-          this.communicationBus.sendMessage(message);
+          this.safeSendMessage(message);
         }
       }
       
@@ -271,7 +283,7 @@ export class AgentManager {
             }
           );
           
-          this.communicationBus.sendMessage(message);
+          this.safeSendMessage(message);
         }
       }
       
