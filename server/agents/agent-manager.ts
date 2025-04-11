@@ -224,6 +224,104 @@ export class AgentManager {
   }
   
   /**
+   * Start BCBS Master Lead Agent
+   */
+  private async startBCBSMasterLeadAgent(
+    agentId: string,
+    settings: Record<string, any>
+  ): Promise<BaseAgent> {
+    logger.info(`Starting BCBS Master Lead Agent: ${agentId}`);
+    
+    // Import dynamically to avoid circular dependencies
+    const { BCBSMasterLeadAgent } = await import('./bcbs-master-lead-agent');
+    
+    const agent = new BCBSMasterLeadAgent(
+      agentId,
+      this.communicationBus,
+      settings || {
+        domainAreas: ['property-assessment', 'tax-calculation', 'gis-integration', 'compliance'],
+        priorityGoals: ['Data accuracy', 'Processing efficiency', 'Regulatory compliance'],
+        complianceFrameworks: ['washington-state']
+      }
+    );
+    
+    await agent.initialize();
+    
+    this.agents.set(agentId, agent);
+    
+    logger.info(`BCBS Master Lead Agent ${agentId} started successfully`);
+    
+    return agent;
+  }
+  
+  /**
+   * Start BCBS GISPro Lead Agent
+   */
+  private async startBCBSGISProLeadAgent(
+    agentId: string,
+    settings: Record<string, any>
+  ): Promise<BaseAgent> {
+    logger.info(`Starting BCBS GISPro Lead Agent: ${agentId}`);
+    
+    // Import dynamically to avoid circular dependencies
+    const { BCBSGISProLeadAgent } = await import('./bcbs-gispro-lead-agent');
+    
+    const agent = new BCBSGISProLeadAgent(
+      agentId,
+      this.communicationBus,
+      settings || {
+        supportedDataFormats: ['shapefile', 'geojson', 'geopackage', 'kml'],
+        spatialAnalysisCapabilities: ['proximity', 'overlay', 'buffer', 'interpolation'],
+        serviceLevels: {
+          'vector_processing': 10,
+          'raster_processing': 5,
+          'spatial_analytics': 8
+        }
+      }
+    );
+    
+    await agent.initialize();
+    
+    this.agents.set(agentId, agent);
+    
+    logger.info(`BCBS GISPro Lead Agent ${agentId} started successfully`);
+    
+    return agent;
+  }
+  
+  /**
+   * Start BCBS Levy Lead Agent
+   */
+  private async startBCBSLevyLeadAgent(
+    agentId: string,
+    settings: Record<string, any>
+  ): Promise<BaseAgent> {
+    logger.info(`Starting BCBS Levy Lead Agent: ${agentId}`);
+    
+    // Import dynamically to avoid circular dependencies
+    const { BCBSLevyLeadAgent } = await import('./bcbs-levy-lead-agent');
+    
+    const agent = new BCBSLevyLeadAgent(
+      agentId,
+      this.communicationBus,
+      settings || {
+        taxYears: [new Date().getFullYear(), new Date().getFullYear() + 1],
+        levyRateSources: ['washington-dor', 'county-treasurer', 'municipal-budget'],
+        taxingAuthorities: ['state', 'county', 'city', 'school', 'fire', 'library', 'port'],
+        calculationModes: ['standard', 'special-assessment', 'multi-year']
+      }
+    );
+    
+    await agent.initialize();
+    
+    this.agents.set(agentId, agent);
+    
+    logger.info(`BCBS Levy Lead Agent ${agentId} started successfully`);
+    
+    return agent;
+  }
+  
+  /**
    * Start an agent of a specific type
    */
   public async startAgent(
@@ -263,8 +361,17 @@ export class AgentManager {
           agent = await this.startComplianceAgent(agentId, settings);
           break;
           
-        // Component Leads and other specialized agents will be added here
-        
+        // Component Leads
+        case AgentType.BSBC_MASTER_LEAD:
+          agent = await this.startBCBSMasterLeadAgent(agentId, settings);
+          break;
+        case AgentType.BCBS_GISPRO_LEAD:
+          agent = await this.startBCBSGISProLeadAgent(agentId, settings);
+          break;
+        case AgentType.BCBS_LEVY_LEAD:
+          agent = await this.startBCBSLevyLeadAgent(agentId, settings);
+          break;
+          
         // Add other agent types as they are implemented
         default:
           logger.error(`Unknown agent type: ${type}`);

@@ -12,6 +12,9 @@ import {
 import { BaseAgent, Task, Agent } from "./base-agent";
 import { DataValidationAgent } from "./data-validation-agent";
 import { ValuationAgent } from "./valuation-agent";
+import { ArchitectPrimeAgent } from "./architect-prime-agent";
+import { IntegrationCoordinatorAgent } from "./integration-coordinator-agent";
+import { ComplianceAgent } from './compliance-agent';
 import { PriorityQueue } from "../utils/priority-queue";
 
 // Task information stored by the MCP
@@ -110,20 +113,75 @@ export class MasterControlProgram extends BaseAgent {
     // Create inter-agent communication bus
     const communicationBus = new AgentCommunicationBus();
     
-    // Create and register specialized agents
+    // Create strategic leadership agents (top-level in hierarchy)
+    const architectPrimeAgent = new ArchitectPrimeAgent('architect-prime', communicationBus, {
+      strategicVision: 'Ensure accurate property assessments and compliance with Washington State regulations',
+      systemGoals: ['Reduce assessment errors by 85%', 'Accelerate valuation workflows by 70%', 'Achieve 100% regulatory compliance']
+    });
+    
+    // Create integration coordinator (second level in hierarchy)
+    const integrationCoordinatorAgent = new IntegrationCoordinatorAgent('integration-coordinator', communicationBus, {
+      coordinationDomains: ['data-flow', 'compliance', 'workflow-management', 'reporting']
+    });
+    
+    // Create specialized functional agents (operational layer)
     const dataValidationAgent = new DataValidationAgent(communicationBus);
     const valuationAgent = new ValuationAgent(communicationBus);
+    const complianceAgent = new ComplianceAgent('compliance-agent', communicationBus, {
+      regulatoryFramework: 'washington-state',
+      complianceThreshold: 0.95
+    });
     
-    // Register agents
+    // Register agents in hierarchical order
+    
+    // 1. Strategic Leadership Layer
+    this.registerAgent(architectPrimeAgent);
+    this.registerAgent(integrationCoordinatorAgent);
+    
+    // 2. Component Leads Layer
+    // Dynamically import to avoid circular dependencies
+    const { BCBSMasterLeadAgent } = await import('./bcbs-master-lead-agent');
+    const { BCBSGISProLeadAgent } = await import('./bcbs-gispro-lead-agent');
+    const { BCBSLevyLeadAgent } = await import('./bcbs-levy-lead-agent');
+    
+    const masterLeadAgent = new BCBSMasterLeadAgent('master-lead', communicationBus, {
+      domainAreas: ['property-assessment', 'tax-calculation', 'gis-integration', 'compliance'],
+      priorityGoals: ['Data accuracy', 'Processing efficiency', 'Regulatory compliance'],
+      complianceFrameworks: ['washington-state']
+    });
+    
+    const gisProLeadAgent = new BCBSGISProLeadAgent('gispro-lead', communicationBus, {
+      supportedDataFormats: ['shapefile', 'geojson', 'geopackage', 'kml'],
+      spatialAnalysisCapabilities: ['proximity', 'overlay', 'buffer', 'interpolation'],
+      serviceLevels: {
+        'vector_processing': 10,
+        'raster_processing': 5,
+        'spatial_analytics': 8
+      }
+    });
+    
+    const levyLeadAgent = new BCBSLevyLeadAgent('levy-lead', communicationBus, {
+      taxYears: [new Date().getFullYear(), new Date().getFullYear() + 1],
+      levyRateSources: ['washington-dor', 'county-treasurer', 'municipal-budget'],
+      taxingAuthorities: ['state', 'county', 'city', 'school', 'fire', 'library', 'port'],
+      calculationModes: ['standard', 'special-assessment', 'multi-year']
+    });
+    
+    this.registerAgent(masterLeadAgent);
+    this.registerAgent(gisProLeadAgent);
+    this.registerAgent(levyLeadAgent);
+    
+    // 3. Specialized Functional Agents
     this.registerAgent(dataValidationAgent);
     this.registerAgent(valuationAgent);
+    this.registerAgent(complianceAgent);
     
     // Initialize all registered agents
     for (const agent of this.agents.values()) {
       await agent.initialize();
     }
     
-    this.logger(`Agent registry setup complete. ${this.agents.size} agents registered`);
+    this.logger(`Agent registry setup complete. ${this.agents.size} agents registered in hierarchical structure`);
   }
   
   /**
