@@ -16,6 +16,8 @@ import { ExperienceReplayBuffer } from '../services/replay-buffer';
 import { MasterControlProgram } from './master-control-program';
 import { DataValidationAgent } from './data-validation-agent';
 import { ComplianceAgent } from './compliance-agent';
+import { ArchitectPrimeAgent } from './architect-prime-agent';
+import { IntegrationCoordinatorAgent } from './integration-coordinator-agent';
 import { logger } from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -172,6 +174,54 @@ export class AgentManager {
     
     return agent;
   }
+
+  /**
+   * Start an Architect Prime Agent
+   */
+  private async startArchitectPrimeAgent(
+    agentId: string,
+    settings: Record<string, any>
+  ): Promise<BaseAgent> {
+    logger.info(`Starting Architect Prime Agent: ${agentId}`);
+    
+    const agent = new ArchitectPrimeAgent(
+      agentId,
+      this.communicationBus,
+      settings
+    );
+    
+    await agent.initialize();
+    
+    this.agents.set(agentId, agent);
+    
+    logger.info(`Architect Prime Agent ${agentId} started successfully`);
+    
+    return agent;
+  }
+
+  /**
+   * Start an Integration Coordinator Agent
+   */
+  private async startIntegrationCoordinatorAgent(
+    agentId: string,
+    settings: Record<string, any>
+  ): Promise<BaseAgent> {
+    logger.info(`Starting Integration Coordinator Agent: ${agentId}`);
+    
+    const agent = new IntegrationCoordinatorAgent(
+      agentId,
+      this.communicationBus,
+      settings
+    );
+    
+    await agent.initialize();
+    
+    this.agents.set(agentId, agent);
+    
+    logger.info(`Integration Coordinator Agent ${agentId} started successfully`);
+    
+    return agent;
+  }
   
   /**
    * Start an agent of a specific type
@@ -192,15 +242,29 @@ export class AgentManager {
       
       // Create the agent based on type
       switch (type) {
+        // Strategic Leadership Layer
+        case AgentType.ARCHITECT_PRIME:
+          agent = await this.startArchitectPrimeAgent(agentId, settings);
+          break;
+        case AgentType.INTEGRATION_COORDINATOR:
+          agent = await this.startIntegrationCoordinatorAgent(agentId, settings);
+          break;
+
+        // Core Orchestration
         case AgentType.MCP:
           agent = await this.startMasterControlProgram();
           break;
+          
+        // Specialized Functional Agents
         case AgentType.DATA_VALIDATION:
           agent = await this.startDataValidationAgent(agentId, settings);
           break;
         case AgentType.COMPLIANCE:
           agent = await this.startComplianceAgent(agentId, settings);
           break;
+          
+        // Component Leads and other specialized agents will be added here
+        
         // Add other agent types as they are implemented
         default:
           logger.error(`Unknown agent type: ${type}`);

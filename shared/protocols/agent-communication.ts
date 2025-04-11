@@ -17,12 +17,36 @@ import { v4 as uuidv4 } from 'uuid';
 
 // Define common agent types here to avoid circular dependencies
 export enum AgentType {
+  // Strategic Leadership Layer
+  ARCHITECT_PRIME = 'ARCHITECT_PRIME',     // Top-level architectural vision
+  INTEGRATION_COORDINATOR = 'INTEGRATION_COORDINATOR', // Second-level integration management
+  
+  // Component Leads
+  BSBC_MASTER_LEAD = 'BSBC_MASTER_LEAD',   // Core system architecture lead
+  BCBS_GISPRO_LEAD = 'BCBS_GISPRO_LEAD',   // Geospatial expertise lead
+  BCBS_LEVY_LEAD = 'BCBS_LEVY_LEAD',       // Tax calculation lead
+  BCBS_COST_APP_LEAD = 'BCBS_COST_APP_LEAD', // Valuation methodology lead
+  BCBS_GEO_ASSESSMENT_LEAD = 'BCBS_GEO_ASSESSMENT_LEAD', // Integration patterns lead
+  
+  // Core Orchestration and Task Management
   MCP = 'MCP',                      // Master Control Program - orchestrator
+  
+  // Specialized Functional Agents
   DATA_VALIDATION = 'DATA_VALIDATION', // Data Validation Agent
   VALUATION = 'VALUATION',          // Valuation Agent
   COMPLIANCE = 'COMPLIANCE',        // Compliance Agent
   USER_INTERACTION = 'USER_INTERACTION', // User Interaction Agent
-  NOTIFICATION = 'NOTIFICATION'     // Notification Agent
+  NOTIFICATION = 'NOTIFICATION',    // Notification Agent
+  
+  // Assessment Calculation Agents
+  PROPERTY_ATTRIBUTE = 'PROPERTY_ATTRIBUTE', // Property attribute processing
+  LOCATION_FACTOR = 'LOCATION_FACTOR',       // Location factor analysis
+  MARKET_ANALYSIS = 'MARKET_ANALYSIS',       // Market data analysis
+  
+  // Geospatial Integration Agents
+  VECTOR_PROCESSING = 'VECTOR_PROCESSING',   // Vector data processing
+  RASTER_PROCESSING = 'RASTER_PROCESSING',   // Raster data processing
+  SPATIAL_ANALYTICS = 'SPATIAL_ANALYTICS'    // Spatial analytics and visualization
 }
 
 // Task status enum
