@@ -1,51 +1,42 @@
 import { Request, Response } from "express";
-import { z } from "zod";
 import { MasterControlProgram } from "../agents/master-control-program";
-import { AgentType, AgentCommunicationBus, Priority } from "@shared/protocols/agent-communication";
-
-// Create a communication bus for inter-agent messaging
-const communicationBus = new AgentCommunicationBus();
-
-// Create and initialize the Master Control Program
-const mcp = new MasterControlProgram(communicationBus);
-
-// Task submission schema
-const submitTaskSchema = z.object({
-  taskType: z.string(),
-  parameters: z.any(),
-  destinationAgent: z.nativeEnum(AgentType).optional(),
-  priority: z.enum(['low', 'medium', 'high', 'critical']).optional()
-});
-
-// Task cancellation schema
-const cancelTaskSchema = z.object({
-  taskId: z.string()
-});
-
-// Agent status request schema
-const agentStatusSchema = z.object({
-  agentType: z.nativeEnum(AgentType)
-});
+import { AgentType, Priority } from "@shared/protocols/agent-communication";
+import { z } from "zod";
+import { randomUUID } from "crypto";
 
 /**
  * Agent Controller - Provides API endpoints for interacting with the agent system
  */
 export class AgentController {
   private initialized: boolean = false;
+  private mcp: MasterControlProgram | null = null;
   
   constructor() {
-    // Initialize MCP on first access
-    this.ensureInitialized();
+    // Initialization of the agent system is deferred until first use
+    this.initialized = false;
+    this.mcp = null;
   }
   
   /**
    * Initialize the agent system if not already initialized
    */
   private async ensureInitialized() {
-    if (!this.initialized) {
-      await mcp.initialize();
+    if (this.initialized && this.mcp) {
+      return;
+    }
+    
+    try {
+      console.log("Initializing Master Control Program and agent system...");
+      
+      // Create and initialize the Master Control Program
+      this.mcp = new MasterControlProgram();
+      await this.mcp.initialize();
+      
       this.initialized = true;
-      console.log('Agent system initialized');
+      console.log("Agent system successfully initialized");
+    } catch (error) {
+      console.error("Failed to initialize agent system:", error);
+      throw new Error("Agent system initialization failed");
     }
   }
   
@@ -57,44 +48,63 @@ export class AgentController {
       await this.ensureInitialized();
       
       // Validate request body
-      const validation = submitTaskSchema.safeParse(req.body);
-      if (!validation.success) {
+      const taskSchema = z.object({
+        agentType: z.enum([
+          AgentType.DATA_VALIDATION, 
+          AgentType.VALUATION, 
+          AgentType.USER_INTERACTION
+        ]),
+        taskType: z.string(),
+        parameters: z.any(),
+        priority: z.enum(["high", "medium", "low"]).optional()
+      });
+      
+      const result = taskSchema.safeParse(req.body);
+      if (!result.success) {
         return res.status(400).json({ 
-          error: 'Invalid request', 
-          details: validation.error.format()
+          error: "Invalid task request", 
+          details: result.error.format() 
         });
       }
       
-      // Extract validated data
-      const { taskType, parameters, destinationAgent, priority } = validation.data;
+      const { agentType, taskType, parameters } = result.data;
+      const priority = result.data.priority 
+        ? (result.data.priority === "high" 
+            ? Priority.HIGH 
+            : result.data.priority === "medium" 
+              ? Priority.MEDIUM 
+              : Priority.LOW)
+        : Priority.MEDIUM;
+      
+      // Generate task ID
+      const taskId = randomUUID();
       
       // Submit task to MCP
-      const result = await mcp.executeTask({
-        id: `api_${Date.now()}`,
-        type: 'submit_task',
-        parameters: {
+      try {
+        const taskResult = await this.mcp!.executeTask({
+          agentType,
+          taskId,
           taskType,
           parameters,
-          destinationAgent,
-          priority: priority as Priority || Priority.MEDIUM,
-          responseRequired: true,
-          source: 'api',
-        },
-        priority: Priority.HIGH,
-        status: 'processing'
-      });
-      
-      return res.status(202).json({
-        message: 'Task submitted successfully',
-        taskId: result.taskId,
-        status: result.status
-      });
+          priority
+        });
+        
+        res.status(202).json({
+          taskId,
+          status: "accepted",
+          result: taskResult
+        });
+      } catch (error) {
+        console.error("Task execution failed:", error);
+        res.status(500).json({
+          taskId,
+          status: "failed",
+          error: error.message || "Task execution failed"
+        });
+      }
     } catch (error) {
-      console.error('Error submitting task:', error);
-      return res.status(500).json({ 
-        error: 'Task submission failed', 
-        message: error.message
-      });
+      console.error("Task submission error:", error);
+      res.status(500).json({ error: "Failed to submit task" });
     }
   }
   
@@ -105,47 +115,36 @@ export class AgentController {
     try {
       await this.ensureInitialized();
       
-      // Validate request body
-      const validation = cancelTaskSchema.safeParse(req.body);
-      if (!validation.success) {
-        return res.status(400).json({ 
-          error: 'Invalid request', 
-          details: validation.error.format()
-        });
+      const { taskId } = req.params;
+      if (!taskId) {
+        return res.status(400).json({ error: "Task ID is required" });
       }
       
-      // Extract task ID
-      const { taskId } = validation.data;
-      
-      // Cancel task via MCP
-      const result = await mcp.executeTask({
-        id: `api_${Date.now()}`,
-        type: 'cancel_task',
-        parameters: { taskId },
-        priority: Priority.HIGH,
-        status: 'processing'
-      });
-      
-      return res.status(200).json({
-        message: 'Task cancelled successfully',
-        taskId: result.taskId,
-        status: result.status
-      });
+      try {
+        const result = await this.mcp!.executeTask({
+          agentType: AgentType.MCP,
+          taskId: randomUUID(),
+          taskType: "cancel_task",
+          parameters: { taskId },
+          priority: Priority.HIGH
+        });
+        
+        res.json({
+          taskId,
+          status: "cancelled",
+          result
+        });
+      } catch (error) {
+        console.error("Task cancellation failed:", error);
+        res.status(500).json({
+          taskId,
+          status: "failed",
+          error: error.message || "Task cancellation failed"
+        });
+      }
     } catch (error) {
-      console.error('Error cancelling task:', error);
-      
-      // Check if it's a "not found" error
-      if (error.message && error.message.includes('not found')) {
-        return res.status(404).json({ 
-          error: 'Task not found', 
-          message: error.message
-        });
-      }
-      
-      return res.status(500).json({ 
-        error: 'Task cancellation failed', 
-        message: error.message
-      });
+      console.error("Task cancellation error:", error);
+      res.status(500).json({ error: "Failed to cancel task" });
     }
   }
   
@@ -156,37 +155,35 @@ export class AgentController {
     try {
       await this.ensureInitialized();
       
-      // Get task ID from params
-      const taskId = req.params.id;
+      const { taskId } = req.params;
       if (!taskId) {
-        return res.status(400).json({ error: 'Task ID is required' });
+        return res.status(400).json({ error: "Task ID is required" });
       }
       
-      // Get task status via MCP
-      const result = await mcp.executeTask({
-        id: `api_${Date.now()}`,
-        type: 'get_task_status',
-        parameters: { taskId },
-        priority: Priority.MEDIUM,
-        status: 'processing'
-      });
-      
-      return res.status(200).json(result);
-    } catch (error) {
-      console.error('Error getting task status:', error);
-      
-      // Check if it's a "not found" error
-      if (error.message && error.message.includes('not found')) {
-        return res.status(404).json({ 
-          error: 'Task not found', 
-          message: error.message
+      try {
+        const result = await this.mcp!.executeTask({
+          agentType: AgentType.MCP,
+          taskId: randomUUID(),
+          taskType: "get_task_status",
+          parameters: { taskId },
+          priority: Priority.LOW
+        });
+        
+        if (!result) {
+          return res.status(404).json({ error: "Task not found" });
+        }
+        
+        res.json(result);
+      } catch (error) {
+        console.error("Get task status failed:", error);
+        res.status(500).json({
+          status: "error",
+          error: error.message || "Failed to get task status"
         });
       }
-      
-      return res.status(500).json({ 
-        error: 'Failed to get task status', 
-        message: error.message
-      });
+    } catch (error) {
+      console.error("Get task status error:", error);
+      res.status(500).json({ error: "Failed to get task status" });
     }
   }
   
@@ -197,40 +194,35 @@ export class AgentController {
     try {
       await this.ensureInitialized();
       
-      // Validate request
-      const agentType = req.params.type as AgentType;
-      if (!Object.values(AgentType).includes(agentType)) {
-        return res.status(400).json({ 
-          error: 'Invalid agent type', 
-          validTypes: Object.values(AgentType)
-        });
+      const { agentType } = req.params;
+      if (!agentType) {
+        return res.status(400).json({ error: "Agent type is required" });
       }
       
-      // Get agent status via MCP
-      const result = await mcp.executeTask({
-        id: `api_${Date.now()}`,
-        type: 'get_agent_status',
-        parameters: { agentType },
-        priority: Priority.MEDIUM,
-        status: 'processing'
-      });
-      
-      return res.status(200).json(result);
+      try {
+        const result = await this.mcp!.executeTask({
+          agentType: AgentType.MCP,
+          taskId: randomUUID(),
+          taskType: "get_agent_status",
+          parameters: { agentType },
+          priority: Priority.LOW
+        });
+        
+        if (!result) {
+          return res.status(404).json({ error: "Agent not found" });
+        }
+        
+        res.json(result);
+      } catch (error) {
+        console.error("Get agent status failed:", error);
+        res.status(500).json({
+          status: "error",
+          error: error.message || "Failed to get agent status"
+        });
+      }
     } catch (error) {
-      console.error('Error getting agent status:', error);
-      
-      // Check if it's a "not found" error
-      if (error.message && error.message.includes('not found')) {
-        return res.status(404).json({ 
-          error: 'Agent not found', 
-          message: error.message
-        });
-      }
-      
-      return res.status(500).json({ 
-        error: 'Failed to get agent status', 
-        message: error.message
-      });
+      console.error("Get agent status error:", error);
+      res.status(500).json({ error: "Failed to get agent status" });
     }
   }
   
@@ -241,22 +233,26 @@ export class AgentController {
     try {
       await this.ensureInitialized();
       
-      // Get system status via MCP
-      const result = await mcp.executeTask({
-        id: `api_${Date.now()}`,
-        type: 'get_system_status',
-        parameters: {},
-        priority: Priority.MEDIUM,
-        status: 'processing'
-      });
-      
-      return res.status(200).json(result);
+      try {
+        const result = await this.mcp!.executeTask({
+          agentType: AgentType.MCP,
+          taskId: randomUUID(),
+          taskType: "get_system_status",
+          parameters: {},
+          priority: Priority.LOW
+        });
+        
+        res.json(result);
+      } catch (error) {
+        console.error("Get system status failed:", error);
+        res.status(500).json({
+          status: "error",
+          error: error.message || "Failed to get system status"
+        });
+      }
     } catch (error) {
-      console.error('Error getting system status:', error);
-      return res.status(500).json({ 
-        error: 'Failed to get system status', 
-        message: error.message
-      });
+      console.error("Get system status error:", error);
+      res.status(500).json({ error: "Failed to get system status" });
     }
   }
   
@@ -267,39 +263,49 @@ export class AgentController {
     try {
       await this.ensureInitialized();
       
-      // Extract property data from request body
-      const propertyData = req.body;
-      if (!propertyData) {
-        return res.status(400).json({ error: 'Property data is required' });
+      // Validate request body
+      const validateSchema = z.object({
+        propertyId: z.number().optional(),
+        property: z.object({}).optional(),
+        validate: z.array(z.string()).optional()
+      });
+      
+      const result = validateSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ 
+          error: "Invalid validation request", 
+          details: result.error.format() 
+        });
       }
       
-      // Submit validation task to MCP
-      const result = await mcp.executeTask({
-        id: `api_${Date.now()}`,
-        type: 'submit_task',
-        parameters: {
-          taskType: 'validate_property',
-          parameters: { property: propertyData },
-          destinationAgent: AgentType.DATA_VALIDATION,
-          priority: Priority.HIGH,
-          responseRequired: true,
-          source: 'api'
-        },
-        priority: Priority.HIGH,
-        status: 'processing'
-      });
+      const { propertyId, property, validate } = result.data;
       
-      return res.status(202).json({
-        message: 'Property validation task submitted',
-        taskId: result.taskId,
-        status: result.status
-      });
+      if (!propertyId && !property) {
+        return res.status(400).json({ 
+          error: "Either propertyId or property data is required" 
+        });
+      }
+      
+      try {
+        const taskResult = await this.mcp!.executeTask({
+          agentType: AgentType.DATA_VALIDATION,
+          taskId: randomUUID(),
+          taskType: "validate_property",
+          parameters: { propertyId, property, validateFields: validate },
+          priority: Priority.MEDIUM
+        });
+        
+        res.json(taskResult);
+      } catch (error) {
+        console.error("Property validation failed:", error);
+        res.status(500).json({
+          status: "error",
+          error: error.message || "Property validation failed"
+        });
+      }
     } catch (error) {
-      console.error('Error submitting property validation task:', error);
-      return res.status(500).json({ 
-        error: 'Property validation submission failed', 
-        message: error.message
-      });
+      console.error("Property validation error:", error);
+      res.status(500).json({ error: "Failed to validate property" });
     }
   }
   
@@ -310,53 +316,54 @@ export class AgentController {
     try {
       await this.ensureInitialized();
       
-      // Extract parameters from request
-      const { propertyId, parcelNumber, context } = req.body;
+      // Validate request body
+      const valuationSchema = z.object({
+        propertyId: z.number().optional(),
+        property: z.object({}).optional(),
+        assessmentYear: z.number(),
+        options: z.object({
+          useComparables: z.boolean().optional(),
+          method: z.enum(["cost", "income", "market", "hybrid"]).optional(),
+          includeTrends: z.boolean().optional()
+        }).optional()
+      });
       
-      if (!propertyId && !parcelNumber) {
+      const result = valuationSchema.safeParse(req.body);
+      if (!result.success) {
         return res.status(400).json({ 
-          error: 'Either propertyId or parcelNumber is required' 
+          error: "Invalid valuation request", 
+          details: result.error.format() 
         });
       }
       
-      // Submit valuation task to MCP
-      const result = await mcp.executeTask({
-        id: `api_${Date.now()}`,
-        type: 'submit_task',
-        parameters: {
-          taskType: 'calculate_property_value',
-          parameters: { 
-            propertyId, 
-            parcelNumber,
-            valuationDate: new Date(),
-            context: context || {
-              purpose: 'assessment',
-              assessmentYear: new Date().getFullYear(),
-              useComparables: true,
-              useHistoricalTrends: true,
-              detectAnomalies: true
-            }
-          },
-          destinationAgent: AgentType.VALUATION,
-          priority: Priority.HIGH,
-          responseRequired: true,
-          source: 'api'
-        },
-        priority: Priority.HIGH,
-        status: 'processing'
-      });
+      const { propertyId, property, assessmentYear, options } = result.data;
       
-      return res.status(202).json({
-        message: 'Property valuation task submitted',
-        taskId: result.taskId,
-        status: result.status
-      });
+      if (!propertyId && !property) {
+        return res.status(400).json({ 
+          error: "Either propertyId or property data is required" 
+        });
+      }
+      
+      try {
+        const taskResult = await this.mcp!.executeTask({
+          agentType: AgentType.VALUATION,
+          taskId: randomUUID(),
+          taskType: "calculate_value",
+          parameters: { propertyId, property, assessmentYear, options },
+          priority: Priority.MEDIUM
+        });
+        
+        res.json(taskResult);
+      } catch (error) {
+        console.error("Property valuation failed:", error);
+        res.status(500).json({
+          status: "error",
+          error: error.message || "Property valuation failed"
+        });
+      }
     } catch (error) {
-      console.error('Error submitting property valuation task:', error);
-      return res.status(500).json({ 
-        error: 'Property valuation submission failed', 
-        message: error.message
-      });
+      console.error("Property valuation error:", error);
+      res.status(500).json({ error: "Failed to calculate property value" });
     }
   }
   
@@ -367,40 +374,48 @@ export class AgentController {
     try {
       await this.ensureInitialized();
       
-      // Extract parameters from request
-      const { propertyId, options } = req.body;
+      // Validate request body
+      const comparablesSchema = z.object({
+        propertyId: z.number(),
+        count: z.number().min(1).max(20).optional(),
+        filters: z.object({
+          radius: z.number().optional(),
+          maxAgeDays: z.number().optional(),
+          sameNeighborhood: z.boolean().optional(),
+          sameTaxingDistrict: z.boolean().optional()
+        }).optional()
+      });
       
-      if (!propertyId) {
-        return res.status(400).json({ error: 'Property ID is required' });
+      const result = comparablesSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ 
+          error: "Invalid comparables request", 
+          details: result.error.format() 
+        });
       }
       
-      // Submit comparable properties task to MCP
-      const result = await mcp.executeTask({
-        id: `api_${Date.now()}`,
-        type: 'submit_task',
-        parameters: {
-          taskType: 'find_comparable_properties',
-          parameters: { propertyId, ...options },
-          destinationAgent: AgentType.VALUATION,
-          priority: Priority.MEDIUM,
-          responseRequired: true,
-          source: 'api'
-        },
-        priority: Priority.MEDIUM,
-        status: 'processing'
-      });
+      const { propertyId, count, filters } = result.data;
       
-      return res.status(202).json({
-        message: 'Comparable properties task submitted',
-        taskId: result.taskId,
-        status: result.status
-      });
+      try {
+        const taskResult = await this.mcp!.executeTask({
+          agentType: AgentType.VALUATION,
+          taskId: randomUUID(),
+          taskType: "find_comparables",
+          parameters: { propertyId, count: count || 10, filters },
+          priority: Priority.MEDIUM
+        });
+        
+        res.json(taskResult);
+      } catch (error) {
+        console.error("Finding comparables failed:", error);
+        res.status(500).json({
+          status: "error",
+          error: error.message || "Finding comparable properties failed"
+        });
+      }
     } catch (error) {
-      console.error('Error submitting comparable properties task:', error);
-      return res.status(500).json({ 
-        error: 'Comparable properties submission failed', 
-        message: error.message
-      });
+      console.error("Finding comparables error:", error);
+      res.status(500).json({ error: "Failed to find comparable properties" });
     }
   }
   
@@ -411,36 +426,57 @@ export class AgentController {
     try {
       await this.ensureInitialized();
       
-      // Extract parameters from request
-      const options = req.body;
-      
-      // Submit anomaly detection task to MCP
-      const result = await mcp.executeTask({
-        id: `api_${Date.now()}`,
-        type: 'submit_task',
-        parameters: {
-          taskType: 'detect_valuation_anomalies',
-          parameters: options || {},
-          destinationAgent: AgentType.VALUATION,
-          priority: Priority.MEDIUM,
-          responseRequired: true,
-          source: 'api'
-        },
-        priority: Priority.MEDIUM,
-        status: 'processing'
+      // Validate request body
+      const anomalySchema = z.object({
+        taxingDistrict: z.string().optional(),
+        propertyType: z.enum([
+          "residential", 
+          "commercial", 
+          "industrial", 
+          "agricultural",
+          "timber",
+          "open_space",
+          "other"
+        ]).optional(),
+        assessmentYear: z.number(),
+        zScoreThreshold: z.number().min(1).max(5).optional()
       });
       
-      return res.status(202).json({
-        message: 'Anomaly detection task submitted',
-        taskId: result.taskId,
-        status: result.status
-      });
+      const result = anomalySchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ 
+          error: "Invalid anomaly detection request", 
+          details: result.error.format() 
+        });
+      }
+      
+      const { taxingDistrict, propertyType, assessmentYear, zScoreThreshold } = result.data;
+      
+      try {
+        const taskResult = await this.mcp!.executeTask({
+          agentType: AgentType.VALUATION,
+          taskId: randomUUID(),
+          taskType: "detect_anomalies",
+          parameters: { 
+            taxingDistrict, 
+            propertyType, 
+            assessmentYear, 
+            zScoreThreshold: zScoreThreshold || 3 
+          },
+          priority: Priority.LOW
+        });
+        
+        res.json(taskResult);
+      } catch (error) {
+        console.error("Anomaly detection failed:", error);
+        res.status(500).json({
+          status: "error",
+          error: error.message || "Detecting valuation anomalies failed"
+        });
+      }
     } catch (error) {
-      console.error('Error submitting anomaly detection task:', error);
-      return res.status(500).json({ 
-        error: 'Anomaly detection submission failed', 
-        message: error.message
-      });
+      console.error("Anomaly detection error:", error);
+      res.status(500).json({ error: "Failed to detect valuation anomalies" });
     }
   }
   
@@ -451,36 +487,51 @@ export class AgentController {
     try {
       await this.ensureInitialized();
       
-      // Submit data quality analysis task to MCP
-      const result = await mcp.executeTask({
-        id: `api_${Date.now()}`,
-        type: 'submit_task',
-        parameters: {
-          taskType: 'analyze_data_quality',
-          parameters: {},
-          destinationAgent: AgentType.DATA_VALIDATION,
-          priority: Priority.MEDIUM,
-          responseRequired: true,
-          source: 'api'
-        },
-        priority: Priority.MEDIUM,
-        status: 'processing'
+      // Validate request body
+      const qualitySchema = z.object({
+        limit: z.number().min(1).max(1000).optional(),
+        offset: z.number().min(0).optional(),
+        propertyId: z.number().optional(),
+        includeMetrics: z.boolean().optional(),
+        includeFieldAnalysis: z.boolean().optional(),
+        thresholds: z.object({
+          completeness: z.number().min(0).max(100).optional(),
+          accuracy: z.number().min(0).max(100).optional(),
+          consistency: z.number().min(0).max(100).optional(),
+          timeliness: z.number().min(0).max(100).optional()
+        }).optional()
       });
       
-      return res.status(202).json({
-        message: 'Data quality analysis task submitted',
-        taskId: result.taskId,
-        status: result.status
-      });
+      const result = qualitySchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ 
+          error: "Invalid data quality analysis request", 
+          details: result.error.format() 
+        });
+      }
+      
+      try {
+        const taskResult = await this.mcp!.executeTask({
+          agentType: AgentType.DATA_VALIDATION,
+          taskId: randomUUID(),
+          taskType: "analyze_data_quality",
+          parameters: result.data,
+          priority: Priority.LOW
+        });
+        
+        res.json(taskResult);
+      } catch (error) {
+        console.error("Data quality analysis failed:", error);
+        res.status(500).json({
+          status: "error",
+          error: error.message || "Data quality analysis failed"
+        });
+      }
     } catch (error) {
-      console.error('Error submitting data quality analysis task:', error);
-      return res.status(500).json({ 
-        error: 'Data quality analysis submission failed', 
-        message: error.message
-      });
+      console.error("Data quality analysis error:", error);
+      res.status(500).json({ error: "Failed to analyze data quality" });
     }
   }
 }
 
-// Create a singleton instance of the controller
 export const agentController = new AgentController();

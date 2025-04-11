@@ -2,160 +2,118 @@ import {
   AgentType, 
   AgentMessage, 
   MessageType, 
-  Priority, 
-  StatusCode,
-  AgentCommunicationBus, 
-  Subscription,
-  TaskMessage,
-  TaskResponseMessage 
+  Priority,
+  AgentCommunicationBus
 } from "@shared/protocols/agent-communication";
 
 /**
- * Interface defining the capabilities of an agent
- */
-export interface Agent {
-  readonly type: AgentType;
-  readonly capabilities: string[];
-  getStatus(): { status: string; metrics: any };
-  handleMessage(message: AgentMessage): Promise<void>;
-  initialize(): Promise<void>;
-  shutdown(): Promise<void>;
-}
-
-/**
- * Task interface representing a unit of work for an agent
+ * Task interface representing a unit of work for an agent to process
  */
 export interface Task {
   id: string;
-  type: string;
+  type: string; 
   parameters: any;
-  context?: any;
-  source?: AgentType;
   priority: Priority;
-  startTime?: Date;
-  endTime?: Date;
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
   result?: any;
   error?: any;
 }
 
 /**
- * Abstract base class for all agents in the system
+ * Agent interface representing any specialized AI agent in the system
+ */
+export interface Agent {
+  type: AgentType | string;
+  capabilities: string[];
+  running: boolean;
+  initialize(): Promise<void>;
+  shutdown(): Promise<void>;
+  handleMessage(message: AgentMessage): Promise<void>;
+  getStatus(): { status: string; metrics: any };
+}
+
+/**
+ * Base Agent class implementing common functionality for all agents
  */
 export abstract class BaseAgent implements Agent {
-  public readonly type: AgentType;
+  public readonly type: AgentType | string;
   public readonly capabilities: string[];
-  
-  protected communicationBus: AgentCommunicationBus;
-  protected subscriptions: Subscription[] = [];
-  protected tasks: Map<string, Task> = new Map();
   protected running: boolean = false;
-  protected logger: (message: string, data?: any) => void;
+  protected communicationBus: AgentCommunicationBus;
+  protected taskMap: Map<string, Task> = new Map();
+  protected startTime: number = 0;
   
+  /**
+   * Constructor
+   * @param type The type of agent
+   * @param capabilities List of capabilities this agent provides
+   * @param communicationBus The communication bus for inter-agent messaging
+   */
   constructor(
-    type: AgentType, 
+    type: AgentType | string, 
     capabilities: string[],
-    communicationBus: AgentCommunicationBus,
-    logger?: (message: string, data?: any) => void
+    communicationBus: AgentCommunicationBus
   ) {
     this.type = type;
     this.capabilities = capabilities;
     this.communicationBus = communicationBus;
-    this.logger = logger || console.log;
   }
   
   /**
-   * Initialize the agent and set up message subscriptions
+   * Initialize the agent
    */
   public async initialize(): Promise<void> {
     if (this.running) {
       return;
     }
     
-    // Subscribe to messages directed to this agent
-    this.subscriptions.push(
-      this.communicationBus.subscribe(this.type, this.handleMessage.bind(this))
-    );
-    
-    // Subscribe to broadcast messages
-    this.subscriptions.push(
-      this.communicationBus.subscribe('broadcast', this.handleMessage.bind(this))
-    );
-    
+    this.startTime = Date.now();
     this.running = true;
-    this.logger(`Agent ${this.type} initialized with capabilities: ${this.capabilities.join(', ')}`);
+    
+    // Subscribe to messages directed to this agent
+    this.communicationBus.subscribe(this.type, this.handleMessage.bind(this));
+    
+    this.logger(`${this.type} agent initialized`);
     
     // Send status update to MCP
     this.sendStatusUpdate();
   }
   
   /**
-   * Shutdown the agent and clean up resources
+   * Shutdown the agent
    */
   public async shutdown(): Promise<void> {
-    // Unsubscribe from all message subscriptions
-    this.subscriptions.forEach(subscription => subscription.unsubscribe());
-    this.subscriptions = [];
-    
-    // Cancel any in-progress tasks
-    for (const task of this.tasks.values()) {
-      if (task.status === 'processing' || task.status === 'pending') {
-        task.status = 'cancelled';
-        task.endTime = new Date();
-      }
-    }
-    
-    this.running = false;
-    this.logger(`Agent ${this.type} shutdown`);
-  }
-  
-  /**
-   * Get the current status of the agent
-   */
-  public getStatus(): { status: string; metrics: any } {
-    const activeTasks = Array.from(this.tasks.values()).filter(
-      t => t.status === 'processing' || t.status === 'pending'
-    ).length;
-    
-    const completedTasks = Array.from(this.tasks.values()).filter(
-      t => t.status === 'completed'
-    ).length;
-    
-    const failedTasks = Array.from(this.tasks.values()).filter(
-      t => t.status === 'failed'
-    ).length;
-    
-    return {
-      status: this.running ? 'running' : 'stopped',
-      metrics: {
-        activeTasks,
-        completedTasks,
-        failedTasks,
-        totalTasks: this.tasks.size,
-        uptime: this.running ? Date.now() - (this.tasks.size > 0 ? 
-          Math.min(...Array.from(this.tasks.values())
-            .filter(t => t.startTime)
-            .map(t => t.startTime!.getTime())) : 
-          Date.now()) : 0
-      }
-    };
-  }
-  
-  /**
-   * Handle an incoming message
-   */
-  public async handleMessage(message: AgentMessage): Promise<void> {
     if (!this.running) {
-      this.logger(`Agent ${this.type} received message ${message.messageId} but is not running`);
       return;
     }
     
-    this.logger(`Agent ${this.type} handling message ${message.messageId} of type ${message.messageType}`);
+    this.running = false;
+    
+    // Unsubscribe from messages
+    this.communicationBus.unsubscribe(this.type);
+    
+    // Clear task map
+    for (const task of this.taskMap.values()) {
+      task.status = 'cancelled';
+    }
+    this.taskMap.clear();
+    
+    this.logger(`${this.type} agent shutdown`);
+  }
+  
+  /**
+   * Handle incoming messages
+   * @param message Message to handle
+   */
+  public async handleMessage(message: AgentMessage): Promise<void> {
+    if (!this.running) {
+      return;
+    }
     
     try {
       switch (message.messageType) {
         case MessageType.TASK_REQUEST:
-          await this.handleTaskRequest(message as TaskMessage);
+          await this.handleTaskRequest(message);
           break;
           
         case MessageType.TASK_CANCEL:
@@ -163,25 +121,17 @@ export abstract class BaseAgent implements Agent {
           break;
           
         case MessageType.STATUS_UPDATE:
-          // Send current status in response
-          this.sendStatusUpdate(message.source, message.messageId);
-          break;
-          
-        case MessageType.HEARTBEAT:
-          // Respond to heartbeat if required
-          if (message.requiresResponse) {
-            this.sendHeartbeatResponse(message);
-          }
+          await this.handleStatusUpdate(message);
           break;
           
         default:
-          // Each agent implementation should handle specialized messages
+          // Handle specialized message types
           await this.handleSpecializedMessage(message);
       }
     } catch (error) {
-      this.logger(`Error handling message ${message.messageId} in agent ${this.type}:`, error);
+      this.logger(`Error handling message: ${error}`);
       
-      // Send error response if the message requires a response
+      // Send error response
       if (message.requiresResponse) {
         this.communicationBus.publish(
           AgentCommunicationBus.createErrorResponse(message, error)
@@ -191,76 +141,103 @@ export abstract class BaseAgent implements Agent {
   }
   
   /**
+   * Get the current status of the agent
+   */
+  public getStatus(): { status: string; metrics: any } {
+    const uptime = this.running ? Date.now() - this.startTime : 0;
+    
+    // Count tasks by status
+    const pendingTasks = Array.from(this.taskMap.values()).filter(t => t.status === 'pending').length;
+    const processingTasks = Array.from(this.taskMap.values()).filter(t => t.status === 'processing').length;
+    const completedTasks = Array.from(this.taskMap.values()).filter(t => t.status === 'completed').length;
+    const failedTasks = Array.from(this.taskMap.values()).filter(t => t.status === 'failed').length;
+    
+    return {
+      status: this.running ? 'running' : 'stopped',
+      metrics: {
+        uptime,
+        tasks: {
+          pending: pendingTasks,
+          processing: processingTasks,
+          completed: completedTasks,
+          failed: failedTasks,
+          total: this.taskMap.size
+        },
+        capabilities: this.capabilities,
+      }
+    };
+  }
+  
+  /**
    * Handle task request message
    */
-  private async handleTaskRequest(message: TaskMessage): Promise<void> {
-    const { taskId, taskType, parameters, context } = message.payload;
+  private async handleTaskRequest(message: AgentMessage): Promise<void> {
+    const { taskId, taskType, parameters } = message.payload;
     
-    // Check if the agent has the required capabilities
-    if (message.payload.requiredCapabilities) {
-      const hasCapabilities = message.payload.requiredCapabilities.every(
-        cap => this.capabilities.includes(cap)
-      );
-      
-      if (!hasCapabilities) {
-        this.sendTaskResponse(message, {
-          taskId,
-          status: StatusCode.RESOURCE_ERROR,
-          errorDetails: {
-            message: `Agent ${this.type} does not have the required capabilities: ${
-              message.payload.requiredCapabilities.filter(c => !this.capabilities.includes(c)).join(', ')
-            }`
-          }
-        });
-        return;
-      }
-    }
-    
-    // Create and initialize the task
+    // Create a task
     const task: Task = {
       id: taskId,
       type: taskType,
       parameters,
-      context,
-      source: message.source as AgentType,
       priority: message.priority,
-      startTime: new Date(),
-      status: 'processing'
+      status: 'pending'
     };
     
-    this.tasks.set(taskId, task);
+    // Store the task
+    this.taskMap.set(taskId, task);
+    
+    // Update task status
+    task.status = 'processing';
     
     try {
       // Execute the task
       const result = await this.executeTask(task);
       
-      // Update task status
-      task.status = 'completed';
-      task.endTime = new Date();
+      // Update task with result
       task.result = result;
+      task.status = 'completed';
       
-      // Send response if required
+      // Send response
       if (message.requiresResponse) {
-        this.sendTaskResponse(message, {
-          taskId,
-          status: StatusCode.SUCCESS,
-          result
+        this.communicationBus.publish({
+          messageId: AgentCommunicationBus.createMessageId(),
+          timestamp: new Date(),
+          source: this.type,
+          destination: message.source,
+          messageType: MessageType.TASK_RESPONSE,
+          priority: message.priority,
+          requiresResponse: false,
+          correlationId: message.messageId,
+          payload: {
+            taskId,
+            status: 'success',
+            result
+          }
         });
       }
     } catch (error) {
-      // Update task status
+      // Update task with error
+      task.error = error.message || 'Unknown error';
       task.status = 'failed';
-      task.endTime = new Date();
-      task.error = error;
       
-      // Send failure response if required
+      // Send error response
       if (message.requiresResponse) {
-        this.sendTaskResponse(message, {
-          taskId,
-          status: StatusCode.FAILURE,
-          errorDetails: {
-            message: error.message || String(error),
-            stack: error.stack
+        this.communicationBus.publish({
+          messageId: AgentCommunicationBus.createMessageId(),
+          timestamp: new Date(),
+          source: this.type,
+          destination: message.source,
+          messageType: MessageType.TASK_RESPONSE,
+          priority: message.priority,
+          requiresResponse: false,
+          correlationId: message.messageId,
+          payload: {
+            taskId,
+            status: 'error',
+            errorDetails: {
+              message: error.message || 'Unknown error',
+              stack: error.stack
+            }
           }
         });
       }
@@ -271,26 +248,62 @@ export abstract class BaseAgent implements Agent {
    * Handle task cancel message
    */
   private async handleTaskCancel(message: AgentMessage): Promise<void> {
-    const taskId = message.payload.taskId;
-    const task = this.tasks.get(taskId);
+    const { taskId } = message.payload;
     
+    // Find the task
+    const task = this.taskMap.get(taskId);
     if (!task) {
-      this.logger(`Task ${taskId} not found for cancellation in agent ${this.type}`);
+      // Task not found, send error response
+      if (message.requiresResponse) {
+        this.communicationBus.publish({
+          messageId: AgentCommunicationBus.createMessageId(),
+          timestamp: new Date(),
+          source: this.type,
+          destination: message.source,
+          messageType: MessageType.TASK_RESPONSE,
+          priority: message.priority,
+          requiresResponse: false,
+          correlationId: message.messageId,
+          payload: {
+            taskId,
+            status: 'error',
+            errorDetails: {
+              message: `Task not found: ${taskId}`
+            }
+          }
+        });
+      }
       return;
     }
     
-    if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled') {
-      this.logger(`Cannot cancel task ${taskId} with status ${task.status}`);
+    // Can only cancel pending or processing tasks
+    if (task.status !== 'pending' && task.status !== 'processing') {
+      if (message.requiresResponse) {
+        this.communicationBus.publish({
+          messageId: AgentCommunicationBus.createMessageId(),
+          timestamp: new Date(),
+          source: this.type,
+          destination: message.source,
+          messageType: MessageType.TASK_RESPONSE,
+          priority: message.priority,
+          requiresResponse: false,
+          correlationId: message.messageId,
+          payload: {
+            taskId,
+            status: 'error',
+            errorDetails: {
+              message: `Cannot cancel task with status ${task.status}`
+            }
+          }
+        });
+      }
       return;
     }
     
-    // Set task as cancelled
+    // Cancel the task
     task.status = 'cancelled';
-    task.endTime = new Date();
     
-    this.logger(`Cancelled task ${taskId} in agent ${this.type}`);
-    
-    // Send confirmation if required
+    // Send response
     if (message.requiresResponse) {
       this.communicationBus.publish({
         messageId: AgentCommunicationBus.createMessageId(),
@@ -298,95 +311,82 @@ export abstract class BaseAgent implements Agent {
         source: this.type,
         destination: message.source,
         messageType: MessageType.TASK_RESPONSE,
-        priority: Priority.MEDIUM,
+        priority: message.priority,
         requiresResponse: false,
         correlationId: message.messageId,
         payload: {
           taskId,
-          status: StatusCode.CANCELLED
+          status: 'success',
+          result: {
+            status: 'cancelled'
+          }
         }
       });
     }
   }
   
   /**
-   * Send task response message
+   * Handle status update message
    */
-  private sendTaskResponse(
-    requestMessage: TaskMessage, 
-    response: { taskId: string; status: StatusCode; result?: any; errorDetails?: any; warnings?: string[] }
-  ): void {
-    // Calculate processing time
-    const task = this.tasks.get(response.taskId);
-    const processingTimeMs = task ? 
-      (task.endTime ? task.endTime.getTime() : Date.now()) - (task.startTime?.getTime() || Date.now()) : 
-      0;
-    
-    // Send response
-    this.communicationBus.publish({
-      messageId: AgentCommunicationBus.createMessageId(),
-      timestamp: new Date(),
-      source: this.type,
-      destination: requestMessage.source,
-      messageType: MessageType.TASK_RESPONSE,
-      priority: requestMessage.priority,
-      requiresResponse: false,
-      correlationId: requestMessage.messageId,
-      payload: {
-        ...response,
-        metrics: {
-          processingTimeMs
-        }
-      }
-    } as TaskResponseMessage);
+  private async handleStatusUpdate(message: AgentMessage): Promise<void> {
+    // Send status update
+    this.sendStatusUpdate(message);
   }
   
   /**
-   * Send heartbeat response message
+   * Send status update to requester or MCP
    */
-  private sendHeartbeatResponse(requestMessage: AgentMessage): void {
-    this.communicationBus.publish({
-      messageId: AgentCommunicationBus.createMessageId(),
-      timestamp: new Date(),
-      source: this.type,
-      destination: requestMessage.source,
-      messageType: MessageType.HEARTBEAT,
-      priority: Priority.LOW,
-      requiresResponse: false,
-      correlationId: requestMessage.messageId,
-      payload: {
-        status: 'alive',
-        timestamp: new Date()
-      }
-    });
-  }
-  
-  /**
-   * Send status update message to MCP or other agent
-   */
-  private sendStatusUpdate(destination: string = AgentType.MCP, correlationId?: string): void {
+  private sendStatusUpdate(requestMessage?: AgentMessage): void {
     const status = this.getStatus();
     
-    this.communicationBus.publish({
-      messageId: AgentCommunicationBus.createMessageId(),
-      timestamp: new Date(),
-      source: this.type,
-      destination,
-      messageType: MessageType.STATUS_UPDATE,
-      priority: Priority.LOW,
-      requiresResponse: false,
-      correlationId,
-      payload: status
-    });
+    if (requestMessage) {
+      // Respond to status request
+      this.communicationBus.publish({
+        messageId: AgentCommunicationBus.createMessageId(),
+        timestamp: new Date(),
+        source: this.type,
+        destination: requestMessage.source,
+        messageType: MessageType.STATUS_UPDATE,
+        priority: Priority.LOW,
+        requiresResponse: false,
+        correlationId: requestMessage.messageId,
+        payload: status
+      });
+    } else {
+      // Broadcast status update to MCP
+      this.communicationBus.publish({
+        messageId: AgentCommunicationBus.createMessageId(),
+        timestamp: new Date(),
+        source: this.type,
+        destination: AgentType.MCP,
+        messageType: MessageType.STATUS_UPDATE,
+        priority: Priority.LOW,
+        requiresResponse: false,
+        payload: status
+      });
+    }
   }
   
   /**
-   * Abstract method to execute a task - must be implemented by agent subclasses
+   * Execute a task assigned to this agent
+   * This method must be implemented by all agent subclasses
    */
   protected abstract executeTask(task: Task): Promise<any>;
   
   /**
-   * Handle specialized messages - should be implemented by agent subclasses
+   * Handle specialized messages specific to this agent
+   * This method should be implemented by agent subclasses that need
+   * to handle specialized message types
    */
-  protected abstract handleSpecializedMessage(message: AgentMessage): Promise<void>;
+  protected async handleSpecializedMessage(message: AgentMessage): Promise<void> {
+    // By default, log that we received an unhandled message type
+    this.logger(`Unhandled message type ${message.messageType} in ${this.type} agent`);
+  }
+  
+  /**
+   * Logger method for agent-specific logging
+   */
+  protected logger(message: string, ...args: any[]): void {
+    console.log(`[${this.type}] ${message}`, ...args);
+  }
 }

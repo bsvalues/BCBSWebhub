@@ -1,42 +1,43 @@
-import { PropertyDataValidator } from "../validators/property-validator";
-import { DataQualityService } from "../services/data-quality";
 import { BaseAgent, Task } from "./base-agent";
+import { PropertyValidator } from "../validators/property-validator";
+import { DataQualityService } from "../services/data-quality";
 import { 
   AgentType, 
   AgentMessage, 
   MessageType, 
-  Priority,
   StatusCode, 
-  AgentCommunicationBus, 
-  DataValidationMessage
+  AgentCommunicationBus,
+  ValidationRequestMessage
 } from "@shared/protocols/agent-communication";
-import { InsertProperty, Property } from "@shared/washington-schema";
+import { db } from "../db";
+import { properties, ValidationResult } from "@shared/washington-schema";
+import { eq } from "drizzle-orm";
 
 /**
  * Data Validation Agent
  * 
  * Specialized agent responsible for validating property data according to
- * Washington State requirements and maintaining data quality metrics.
+ * Washington State rules and regulations, detecting data quality issues,
+ * and making recommendations for data corrections.
  */
 export class DataValidationAgent extends BaseAgent {
-  private validator: PropertyDataValidator;
+  private validator: PropertyValidator;
   private dataQualityService: DataQualityService;
   
   constructor(communicationBus: AgentCommunicationBus) {
     super(
       AgentType.DATA_VALIDATION, 
       [
-        'property_validation',
-        'parcel_number_validation',
-        'data_quality_assessment',
-        'exemption_validation',
-        'value_calculation_validation',
-        'washington_state_compliance'
+        'data_validation',
+        'data_quality_analysis',
+        'washington_state_compliance',
+        'data_recommendation',
+        'batch_validation'
       ],
       communicationBus
     );
     
-    this.validator = new PropertyDataValidator();
+    this.validator = new PropertyValidator();
     this.dataQualityService = new DataQualityService();
   }
   
@@ -46,16 +47,16 @@ export class DataValidationAgent extends BaseAgent {
   protected async executeTask(task: Task): Promise<any> {
     switch (task.type) {
       case 'validate_property':
-        return this.validateProperty(task.parameters.property);
-        
-      case 'analyze_data_quality':
-        return this.analyzeDataQuality();
-        
-      case 'generate_data_recommendations':
-        return this.generateDataRecommendations();
+        return this.validateProperty(task.parameters);
         
       case 'validate_property_batch':
-        return this.validatePropertyBatch(task.parameters.properties);
+        return this.validatePropertyBatch(task.parameters);
+        
+      case 'analyze_data_quality':
+        return this.analyzeDataQuality(task.parameters);
+        
+      case 'generate_data_recommendations':
+        return this.generateDataRecommendations(task.parameters);
         
       default:
         throw new Error(`Unsupported task type: ${task.type}`);
@@ -67,8 +68,8 @@ export class DataValidationAgent extends BaseAgent {
    */
   protected async handleSpecializedMessage(message: AgentMessage): Promise<void> {
     switch (message.messageType) {
-      case MessageType.DATA_VALIDATION_REQUEST:
-        await this.handleDataValidationRequest(message as DataValidationMessage);
+      case MessageType.VALIDATION_REQUEST:
+        await this.handleValidationRequest(message as ValidationRequestMessage);
         break;
         
       default:
@@ -77,31 +78,28 @@ export class DataValidationAgent extends BaseAgent {
   }
   
   /**
-   * Handle data validation request message
+   * Handle property validation request message
    */
-  private async handleDataValidationRequest(message: DataValidationMessage): Promise<void> {
-    const { dataId, dataType, data, validationRules, strictMode } = message.payload;
-    
-    let validationResult;
+  private async handleValidationRequest(message: ValidationRequestMessage): Promise<void> {
+    const { propertyId, property } = message.payload;
     
     try {
-      // Validate based on data type
-      switch (dataType) {
-        case 'property':
-          validationResult = await this.validateProperty(data, strictMode);
-          break;
-          
-        case 'property_batch':
-          validationResult = await this.validatePropertyBatch(data, strictMode);
-          break;
-          
-        case 'parcel_number':
-          validationResult = this.validateParcelNumber(data);
-          break;
-          
-        default:
-          throw new Error(`Unsupported data type for validation: ${dataType}`);
+      let result;
+      
+      if (propertyId) {
+        // Validate existing property by ID
+        result = await this.validateProperty({ propertyId });
+      } else if (property) {
+        // Validate provided property data
+        result = await this.validateProperty({ property });
+      } else {
+        throw new Error("Either propertyId or property data is required for validation");
       }
+      
+      // Extract relevant info from validation results
+      const isValid = result.isValid;
+      const validationResults = result.results;
+      const validationSummary = result.summary;
       
       // Send validation response
       this.communicationBus.publish({
@@ -109,16 +107,15 @@ export class DataValidationAgent extends BaseAgent {
         timestamp: new Date(),
         source: this.type,
         destination: message.source,
-        messageType: MessageType.DATA_VALIDATION_RESPONSE,
+        messageType: MessageType.VALIDATION_RESPONSE,
         priority: message.priority,
         requiresResponse: false,
         correlationId: message.messageId,
         payload: {
-          dataId,
-          dataType,
-          isValid: validationResult.isValid,
-          validationResults: validationResult.results,
-          summary: validationResult.summary
+          propertyId: propertyId || property?.id,
+          isValid,
+          validationResults,
+          validationSummary
         }
       });
     } catch (error) {
@@ -132,162 +129,218 @@ export class DataValidationAgent extends BaseAgent {
   /**
    * Validate a property against Washington State rules
    */
-  private async validateProperty(
-    property: Partial<Property>, 
-    strictMode: boolean = false
-  ): Promise<{
-    isValid: boolean;
-    results: any[];
-    summary: any;
-  }> {
-    this.logger(`Validating property: ${property.parcelNumber || 'unknown'}`);
+  private async validateProperty(params: { propertyId?: number, property?: any }): Promise<any> {
+    const { propertyId, property } = params;
     
-    // Use property validator for WA-specific rules
-    const validationResults = this.validator.validateProperty(property);
-    const summary = this.validator.getValidationSummary(validationResults);
-    
-    // If using strict mode, check with Zod validation as well
-    let zodValidation;
-    if (strictMode) {
-      zodValidation = this.validator.validatePropertyWithZod(property);
+    // Get property data if only ID was provided
+    let propertyData = property;
+    if (propertyId && !property) {
+      const results = await db
+        .select()
+        .from(properties)
+        .where(eq(properties.id, propertyId));
       
-      if (!zodValidation.isValid && zodValidation.errors) {
-        // Convert Zod errors to standard format
-        const zodErrors = zodValidation.errors.map(error => ({
-          field: error.path.join('.'),
-          isValid: false,
-          rule: 'ZOD_VALIDATION',
-          message: error.message,
-          severity: 'error'
-        }));
-        
-        // Add Zod errors to validation results
-        validationResults.push(...zodErrors);
-        
-        // Update summary
-        summary.errorCount += zodErrors.length;
-        summary.errorFields = [...new Set([...summary.errorFields, ...zodErrors.map(e => e.field)])];
+      if (results.length === 0) {
+        throw new Error(`Property not found with ID: ${propertyId}`);
+      }
+      
+      propertyData = results[0];
+    }
+    
+    if (!propertyData) {
+      throw new Error("No property data provided for validation");
+    }
+    
+    // Validate the property
+    const validationResults = this.validator.validateProperty(propertyData);
+    
+    // Count validation results by severity
+    const errorCount = validationResults.filter(r => r.severity === "error").length;
+    const warningCount = validationResults.filter(r => r.severity === "warning").length;
+    const infoCount = validationResults.filter(r => r.severity === "info").length;
+    
+    // Check if there are any blocking errors
+    const isValid = errorCount === 0;
+    
+    // Group validation results by field
+    const fieldMap = new Map<string, ValidationResult[]>();
+    validationResults.forEach(result => {
+      if (!fieldMap.has(result.field)) {
+        fieldMap.set(result.field, []);
+      }
+      fieldMap.get(result.field)!.push(result);
+    });
+    
+    // Create validation summary
+    const fieldResults = Array.from(fieldMap.entries()).map(([field, results]) => {
+      // Check if field has errors
+      const hasErrors = results.some(r => r.severity === "error");
+      
+      return {
+        field,
+        isValid: !hasErrors,
+        rule: results.map(r => r.rule).join(", "),
+        message: results.map(r => r.message).join("; "),
+        severity: hasErrors ? "error" : results.some(r => r.severity === "warning") ? "warning" : "info"
+      };
+    });
+    
+    // Get list of fields with errors
+    const fieldsWithErrors = new Set<string>();
+    for (const [field, results] of fieldMap.entries()) {
+      if (results.some(r => r.severity === "error")) {
+        fieldsWithErrors.add(field);
       }
     }
     
     return {
-      isValid: summary.isValid,
+      isValid,
       results: validationResults,
       summary: {
-        ...summary,
-        strictModeUsed: strictMode,
-        zodValidationPassed: strictMode ? zodValidation?.isValid : undefined
+        propertyId: propertyData.id,
+        parcelNumber: propertyData.parcelNumber,
+        isValid,
+        errorCount,
+        warningCount,
+        infoCount,
+        totalIssues: validationResults.length,
+        fieldResults,
+        fieldsWithErrors: Array.from(fieldsWithErrors),
+        timestamp: new Date()
       }
     };
   }
   
   /**
-   * Validate a batch of properties
+   * Validate multiple properties in a batch
    */
-  private async validatePropertyBatch(
-    properties: Partial<Property>[],
-    strictMode: boolean = false
-  ): Promise<{
-    totalProperties: number;
-    validProperties: number;
-    invalidProperties: number;
-    results: any[];
-    errorSummary: Record<string, number>;
-  }> {
-    this.logger(`Validating property batch with ${properties.length} properties`);
+  private async validatePropertyBatch(params: { propertyIds?: number[], properties?: any[] }): Promise<any> {
+    const { propertyIds, properties } = params;
     
-    const results = await Promise.all(
-      properties.map(async property => ({
-        property: {
-          id: property.id,
-          parcelNumber: property.parcelNumber
-        },
-        validation: await this.validateProperty(property, strictMode)
-      }))
+    if (!propertyIds && !properties) {
+      throw new Error("Either propertyIds or properties array is required for batch validation");
+    }
+    
+    let propertiesToValidate: any[] = [];
+    
+    // If property IDs provided, fetch them from the database
+    if (propertyIds && propertyIds.length > 0) {
+      // TODO: Replace with a more efficient query when Drizzle supports IN operator
+      for (const id of propertyIds) {
+        const results = await db
+          .select()
+          .from(properties)
+          .where(eq(properties.id, id));
+        
+        if (results.length > 0) {
+          propertiesToValidate.push(results[0]);
+        }
+      }
+    } else if (properties && properties.length > 0) {
+      propertiesToValidate = properties;
+    }
+    
+    // Validate each property
+    const validationResults = await Promise.all(
+      propertiesToValidate.map(async (property) => {
+        try {
+          const result = await this.validateProperty({ property });
+          return {
+            propertyId: property.id,
+            parcelNumber: property.parcelNumber,
+            success: true,
+            isValid: result.isValid,
+            summary: result.summary,
+            details: result.results
+          };
+        } catch (error) {
+          return {
+            propertyId: property.id,
+            parcelNumber: property.parcelNumber,
+            success: false,
+            error: error.message
+          };
+        }
+      })
     );
     
-    // Calculate summary
-    const validProperties = results.filter(r => r.validation.isValid).length;
-    const invalidProperties = results.filter(r => !r.validation.isValid).length;
+    // Count total properties, valid properties, and invalid properties
+    const totalProperties = validationResults.length;
+    const validProperties = validationResults.filter(r => r.success && r.isValid).length;
+    const invalidProperties = validationResults.filter(r => r.success && !r.isValid).length;
+    const failedValidations = validationResults.filter(r => !r.success).length;
     
-    // Count errors by field
+    // Group validation errors by type
     const errorSummary: Record<string, number> = {};
-    results
-      .filter(r => !r.validation.isValid)
-      .forEach(r => {
-        r.validation.summary.errorFields.forEach((field: string) => {
-          errorSummary[field] = (errorSummary[field] || 0) + 1;
-        });
+    validationResults
+      .filter(r => r.success && r.details)
+      .forEach(result => {
+        result.details
+          .filter(d => d.severity === "error")
+          .forEach(detail => {
+            const errorKey = `${detail.field}.${detail.rule}`;
+            errorSummary[errorKey] = (errorSummary[errorKey] || 0) + 1;
+          });
       });
     
     return {
-      totalProperties: properties.length,
+      totalProperties,
       validProperties,
       invalidProperties,
-      results,
-      errorSummary
+      failedValidations,
+      results: validationResults,
+      errorSummary,
+      timestamp: new Date()
     };
   }
   
   /**
-   * Validate a parcel number
+   * Analyze data quality for properties
    */
-  private validateParcelNumber(parcelNumber: string): {
-    isValid: boolean;
-    result: any;
-  } {
-    const validation = this.validator.validateProperty({ parcelNumber });
-    const parcelValidation = validation.find(v => v.field === 'parcelNumber');
+  private async analyzeDataQuality(params: any): Promise<any> {
+    const options = {
+      limit: params?.limit || 100,
+      offset: params?.offset || 0,
+      includeMetrics: params?.includeMetrics !== false,
+      includeFieldAnalysis: params?.includeFieldAnalysis !== false,
+      thresholds: params?.thresholds
+    };
+    
+    // Use data quality service
+    const qualityAnalysis = await this.dataQualityService.analyzeDataQuality(options);
     
     return {
-      isValid: parcelValidation?.isValid || false,
-      result: parcelValidation
+      ...qualityAnalysis,
+      timestamp: new Date()
     };
   }
   
   /**
-   * Analyze data quality across all properties
+   * Generate data improvement recommendations
    */
-  private async analyzeDataQuality(): Promise<any> {
-    this.logger('Analyzing data quality');
+  private async generateDataRecommendations(params: any): Promise<any> {
+    const propertyId = params?.propertyId;
+    const analysisType = params?.analysisType || 'all';
     
-    // Use data quality service to get comprehensive metrics
-    const metrics = await this.dataQualityService.calculateDataQualityMetrics();
+    // Quick data quality check 
+    const qualityAnalysis = await this.dataQualityService.analyzeDataQuality({
+      limit: propertyId ? 1 : 100,
+      propertyId
+    });
     
-    return {
-      metrics,
-      timestamp: new Date(),
-      agentVersion: '1.0',
-      validatorVersion: this.validator.rulesVersion
-    };
-  }
-  
-  /**
-   * Generate data quality recommendations
-   */
-  private async generateDataRecommendations(): Promise<any> {
-    this.logger('Generating data recommendations');
-    
-    // Get data quality metrics
-    const metrics = await this.dataQualityService.calculateDataQualityMetrics();
-    
-    // Generate recommendations based on metrics
-    const recommendations = this.dataQualityService.generateRecommendations(metrics);
-    
-    // Get historical trend data
-    const historicalMetrics = await this.dataQualityService.getHistoricalMetrics(30);
+    // Generate recommendations based on data quality issues
+    const recommendations = await this.dataQualityService.generateRecommendations({
+      qualityAnalysis,
+      analysisType,
+      propertyId
+    });
     
     return {
       recommendations,
-      currentScore: metrics.overallScore,
-      historicalTrend: historicalMetrics.map(m => ({
-        date: m.date,
-        score: m.score
-      })),
-      criticalIssueCount: metrics.criticalIssueCount,
-      improvementAreas: Object.entries(metrics.completeness)
-        .filter(([_, value]) => value < 0.9)
-        .map(([field]) => field)
+      analysisType,
+      propertyId,
+      qualityScore: qualityAnalysis.overallScore,
+      timestamp: new Date()
     };
   }
 }

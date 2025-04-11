@@ -1696,5 +1696,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Register AI agent system routes
+  console.log('Registering AI agent system routes...');
+  app.use('/api/agents', ensureAuthenticated, agentRoutes);
+
   return httpServer;
 }
