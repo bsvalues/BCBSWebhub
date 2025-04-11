@@ -1,321 +1,292 @@
-import { randomUUID } from "crypto";
-
-/**
- * Agent Type Enumeration
- * 
- * Defines the types of agents in the AI Army architecture.
- */
-export enum AgentType {
-  MCP = "master_control_program",
-  DATA_VALIDATION = "data_validation_agent",
-  COMPLIANCE = "compliance_agent",
-  VALUATION = "valuation_agent",
-  USER_INTERACTION = "user_interaction_agent"
-}
-
-/**
- * Message Type Enumeration
- * 
- * Defines the types of messages that can be exchanged between agents.
- */
-export enum MessageType {
-  // System messages
-  STATUS_UPDATE = "status_update",
-  STATUS_UPDATE_RESPONSE = "status_update_response",
-  ERROR_REPORT = "error_report",
-  AGENT_REGISTRATION = "agent_registration",
-  AGENT_REGISTRATION_RESPONSE = "agent_registration_response",
-  HEARTBEAT = "heartbeat",
-  SHUTDOWN = "shutdown",
-  
-  // Task management messages
-  TASK_REQUEST = "task_request",
-  TASK_RESPONSE = "task_response",
-  TASK_CANCEL = "task_cancel",
-  TASK_PROGRESS = "task_progress",
-  
-  // Validation messages
-  VALIDATION_REQUEST = "validation_request",
-  VALIDATION_RESPONSE = "validation_response",
-  
-  // Valuation messages
-  VALUATION_REQUEST = "valuation_request",
-  VALUATION_RESPONSE = "valuation_response",
-  
-  // Compliance messages
-  COMPLIANCE_CHECK_REQUEST = "compliance_check_request",
-  COMPLIANCE_CHECK_RESPONSE = "compliance_check_response",
-  
-  // User interaction messages
-  USER_QUERY_REQUEST = "user_query_request",
-  USER_QUERY_RESPONSE = "user_query_response",
-  
-  // Data exchange messages
-  DATA_REQUEST = "data_request",
-  DATA_RESPONSE = "data_response",
-  
-  // Custom message type
-  CUSTOM = "custom"
-}
-
-/**
- * Priority Enumeration
- * 
- * Defines the priority levels for agent tasks and messages.
- */
-export enum Priority {
-  HIGH = 3,
-  MEDIUM = 2,
-  LOW = 1
-}
-
-/**
- * Agent Message Interface
- * 
- * Defines the structure of messages exchanged between agents.
- */
-export interface AgentMessage {
-  messageId: string;
-  timestamp: Date;
-  source: string;
-  destination: string | 'broadcast';
-  messageType: MessageType;
-  priority: Priority;
-  requiresResponse: boolean;
-  correlationId?: string;
-  expiresAt?: Date;
-  payload: any;
-}
-
-/**
- * Task Interface
- * 
- * Defines the structure of tasks that agents can execute.
- */
-export interface Task {
-  id: string;
-  type: string;
-  priority: Priority;
-  parameters: any;
-  createdAt: Date;
-  assignedAt?: Date;
-  completedAt?: Date;
-  result?: any;
-  error?: any;
-}
-
-/**
- * Agent Status
- * 
- * Defines the status information that agents provide about themselves.
- */
-export interface AgentStatus {
-  status: 'initializing' | 'running' | 'paused' | 'stopping' | 'stopped' | 'error';
-  uptime: number;
-  taskCount: {
-    pending: number;
-    processing: number;
-    completed: number;
-    failed: number;
-  };
-  lastActiveTime: Date;
-  metrics: {
-    [key: string]: any;
-  };
-  error?: any;
-}
-
-/**
- * Agent Interface
- * 
- * Defines the common interface that all agents must implement.
- */
-export interface Agent {
-  type: string;
-  capabilities: string[];
-  running: boolean;
-  
-  initialize(): Promise<void>;
-  shutdown(): Promise<void>;
-  getStatus(): AgentStatus;
-  sendMessage(message: AgentMessage): void;
-}
-
-/**
- * Validation Request Message
- * 
- * Defines the structure of a validation request message.
- */
-export interface ValidationRequestMessage {
-  propertyId?: number;
-  property?: any;
-  validateFields?: string[];
-  validationRules?: string[];
-}
-
-/**
- * Valuation Request Message
- * 
- * Defines the structure of a valuation request message.
- */
-export interface ValuationRequestMessage {
-  propertyId?: number;
-  property?: any;
-  assessmentYear: number;
-  options?: {
-    useComparables?: boolean;
-    method?: 'cost' | 'income' | 'market' | 'hybrid';
-    includeTrends?: boolean;
-  };
-}
-
-/**
- * Compliance Check Request Message
- * 
- * Defines the structure of a compliance check request message.
- */
-export interface ComplianceCheckRequestMessage {
-  propertyId?: number;
-  property?: any;
-  assessmentYear?: number;
-  categories?: string[];
-  regulationIds?: string[];
-}
-
-/**
- * User Query Request Message
- * 
- * Defines the structure of a user query request message.
- */
-export interface UserQueryRequestMessage {
-  userId: number;
-  query: string;
-  context?: any;
-}
-
 /**
  * Agent Communication Bus
  * 
- * Provides a publish-subscribe mechanism for inter-agent communication.
+ * Provides a centralized publish-subscribe system for inter-agent communication
+ * with standardized message formats, event-driven architecture, and support
+ * for direct messaging and broadcasting.
  */
+
+import {
+  AgentMessage,
+  MessageEventType,
+  createErrorResponse,
+  isMessageExpired
+} from './message-protocol';
+import { EventEmitter } from 'events';
+import { v4 as uuidv4 } from 'uuid';
+
+// Define common agent types here to avoid circular dependencies
+export enum AgentType {
+  MCP = 'MCP',                      // Master Control Program - orchestrator
+  DATA_VALIDATION = 'DATA_VALIDATION', // Data Validation Agent
+  VALUATION = 'VALUATION',          // Valuation Agent
+  COMPLIANCE = 'COMPLIANCE',        // Compliance Agent
+  USER_INTERACTION = 'USER_INTERACTION', // User Interaction Agent
+  NOTIFICATION = 'NOTIFICATION'     // Notification Agent
+}
+
+// Task status enum
+export enum TaskStatus {
+  PENDING = 'PENDING',
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED'
+}
+
+// Agent status 
+export enum AgentStatus {
+  INITIALIZING = 'INITIALIZING',
+  READY = 'READY',
+  BUSY = 'BUSY',
+  PAUSED = 'PAUSED',
+  SHUTTING_DOWN = 'SHUTTING_DOWN',
+  ERROR = 'ERROR'
+}
+
+// Task interface
+export interface Task {
+  id: string;
+  type: string;
+  parameters: Record<string, any>;
+  status: TaskStatus;
+  priority: number;
+  createdAt: Date;
+  startedAt?: Date;
+  completedAt?: Date;
+  result?: any;
+  error?: string;
+}
+
+// Define the message handler callback type
+export type MessageHandler = (message: AgentMessage) => Promise<void>;
+
+// Define the response holder interface
+interface ResponseHolder {
+  resolve: (response: AgentMessage) => void;
+  reject: (error: Error) => void;
+  timeout: NodeJS.Timeout;
+}
+
+// The main agent communication bus class
 export class AgentCommunicationBus {
-  private subscribers: Map<string, ((message: AgentMessage) => void)[]> = new Map();
-  private messageLog: AgentMessage[] = [];
-  private readonly MAX_LOG_SIZE = 1000;
+  // Track registered agents
+  public registeredAgents: Set<string> = new Set();
+  
+  // Keep track of pending response promises
+  public responseRegistry: Map<string, ResponseHolder> = new Map();
+  
+  // Event emitter for agent-specific messages
+  private agentEmitter: EventEmitter = new EventEmitter();
+  
+  // Event emitter for topic-based messages
+  private topicEmitter: EventEmitter = new EventEmitter();
+  
+  // Default response timeout
+  private defaultResponseTimeoutMs: number = 30000;
+  
+  // Constructor with optional configuration
+  constructor(options: { defaultResponseTimeoutMs?: number } = {}) {
+    // Set the default response timeout if provided
+    if (options.defaultResponseTimeoutMs) {
+      this.defaultResponseTimeoutMs = options.defaultResponseTimeoutMs;
+    }
+    
+    // Set maximum number of listeners to avoid warnings
+    this.agentEmitter.setMaxListeners(100);
+    this.topicEmitter.setMaxListeners(100);
+  }
   
   /**
-   * Generate a unique message ID
+   * Register an agent with the communication bus
+   */
+  public registerAgent(agentId: string): void {
+    if (this.registeredAgents.has(agentId)) {
+      console.warn(`Agent ${agentId} is already registered`);
+      return;
+    }
+    
+    this.registeredAgents.add(agentId);
+    console.log(`Agent ${agentId} registered with communication bus`);
+  }
+  
+  /**
+   * Unregister an agent from the communication bus
+   */
+  public unregisterAgent(agentId: string): void {
+    if (!this.registeredAgents.has(agentId)) {
+      console.warn(`Agent ${agentId} is not registered`);
+      return;
+    }
+    
+    this.registeredAgents.delete(agentId);
+    console.log(`Agent ${agentId} unregistered from communication bus`);
+  }
+  
+  /**
+   * Subscribe to messages for a specific agent
+   */
+  public subscribeToAgent(
+    agentId: string, 
+    handler: MessageHandler
+  ): void {
+    this.agentEmitter.on(agentId, handler);
+  }
+  
+  /**
+   * Unsubscribe from messages for a specific agent
+   */
+  public unsubscribeFromAgent(
+    agentId: string, 
+    handler: MessageHandler
+  ): void {
+    this.agentEmitter.off(agentId, handler);
+  }
+  
+  /**
+   * Subscribe to a topic
+   */
+  public subscribeToTopic(
+    topic: string, 
+    handler: MessageHandler
+  ): void {
+    this.topicEmitter.on(topic, handler);
+  }
+  
+  /**
+   * Unsubscribe from a topic
+   */
+  public unsubscribeFromTopic(
+    topic: string, 
+    handler: MessageHandler
+  ): void {
+    this.topicEmitter.off(topic, handler);
+  }
+  
+  /**
+   * Send a message
+   * This handles routing to the correct destination
+   */
+  public sendMessage(message: AgentMessage): void {
+    // Check if message has expired
+    if (isMessageExpired(message)) {
+      console.warn(`Message ${message.messageId} has expired and will not be delivered`);
+      return;
+    }
+    
+    // Handle broadcasts to all agents
+    if (message.destination === 'broadcast') {
+      // Emit to all registered agents
+      for (const agentId of this.registeredAgents) {
+        if (agentId !== message.source) {
+          this.agentEmitter.emit(agentId, message);
+        }
+      }
+      return;
+    }
+    
+    // Check if this is a response to a message
+    if (message.eventType === MessageEventType.RESPONSE && message.correlationId) {
+      const responseHolder = this.responseRegistry.get(message.correlationId);
+      
+      if (responseHolder) {
+        // Clear the timeout
+        clearTimeout(responseHolder.timeout);
+        
+        // Remove from the registry
+        this.responseRegistry.delete(message.correlationId);
+        
+        // Resolve the promise
+        responseHolder.resolve(message);
+        return;
+      }
+    }
+    
+    // Handle case where destination is not registered
+    if (!this.registeredAgents.has(message.destination) && message.destination !== 'broadcast') {
+      console.warn(`Agent ${message.destination} is not registered, message will not be delivered`);
+      
+      // If the message requires a response, send an error response
+      if (message.requiresResponse) {
+        const errorResponse = createErrorResponse(
+          message,
+          'destination_not_found',
+          `Agent ${message.destination} is not registered`
+        );
+        
+        // Send the error response back to the source
+        this.sendMessage(errorResponse);
+      }
+      
+      return;
+    }
+    
+    // Emit the message to the destination agent
+    this.agentEmitter.emit(message.destination, message);
+  }
+  
+  /**
+   * Send a message and wait for a response
+   */
+  public sendMessageWithResponse(
+    message: AgentMessage, 
+    timeoutMs: number = this.defaultResponseTimeoutMs
+  ): Promise<AgentMessage> {
+    // Make sure the message requires a response
+    const messageWithResponse = {
+      ...message,
+      requiresResponse: true
+    };
+    
+    return new Promise<AgentMessage>((resolve, reject) => {
+      // Create a timeout to reject the promise if no response is received
+      const timeout = setTimeout(() => {
+        // Remove from the registry
+        this.responseRegistry.delete(messageWithResponse.messageId);
+        
+        // Reject the promise
+        reject(new Error(`No response received for message ${messageWithResponse.messageId} within ${timeoutMs}ms`));
+      }, timeoutMs);
+      
+      // Add to the registry
+      this.responseRegistry.set(messageWithResponse.messageId, {
+        resolve,
+        reject,
+        timeout
+      });
+      
+      // Send the message
+      this.sendMessage(messageWithResponse);
+    });
+  }
+  
+  /**
+   * Publish a message to a topic
+   */
+  public publishToTopic(topic: string, message: AgentMessage): void {
+    this.topicEmitter.emit(topic, message);
+  }
+  
+  /**
+   * Create a unique message ID
    */
   public static createMessageId(): string {
-    return randomUUID();
+    return uuidv4();
   }
   
   /**
-   * Publish a message to the communication bus
+   * Create an error response for a message
    */
-  public publish(message: AgentMessage): void {
-    // Log the message
-    this.logMessage(message);
+  public static createErrorResponse(
+    originalMessage: AgentMessage, 
+    error: Error | string
+  ): AgentMessage {
+    const errorMessage = typeof error === 'string' ? error : error.message;
     
-    // If it's a broadcast message, send to all subscribers
-    if (message.destination === 'broadcast') {
-      for (const [agentType, handlers] of this.subscribers.entries()) {
-        if (agentType !== message.source) {
-          for (const handler of handlers) {
-            try {
-              handler(message);
-            } catch (error) {
-              console.error(`Error in message handler for ${agentType}:`, error);
-            }
-          }
-        }
-      }
-      return;
-    }
-    
-    // Otherwise, send to the specific destination
-    const handlers = this.subscribers.get(message.destination);
-    if (handlers && handlers.length > 0) {
-      for (const handler of handlers) {
-        try {
-          handler(message);
-        } catch (error) {
-          console.error(`Error in message handler for ${message.destination}:`, error);
-        }
-      }
-    }
-  }
-  
-  /**
-   * Subscribe to messages for a specific agent type
-   */
-  public subscribe(agentType: string, handler: (message: AgentMessage) => void): (() => void) {
-    if (!this.subscribers.has(agentType)) {
-      this.subscribers.set(agentType, []);
-    }
-    
-    const handlers = this.subscribers.get(agentType)!;
-    handlers.push(handler);
-    
-    // Return unsubscribe function
-    return () => {
-      this.unsubscribe(agentType, handler);
-    };
-  }
-  
-  /**
-   * Unsubscribe from messages
-   */
-  private unsubscribe(agentType: string, handler: (message: AgentMessage) => void): void {
-    if (!this.subscribers.has(agentType)) {
-      return;
-    }
-    
-    const handlers = this.subscribers.get(agentType)!;
-    const index = handlers.indexOf(handler);
-    
-    if (index !== -1) {
-      handlers.splice(index, 1);
-    }
-    
-    // Clean up empty subscribers
-    if (handlers.length === 0) {
-      this.subscribers.delete(agentType);
-    }
-  }
-  
-  /**
-   * Log a message
-   */
-  private logMessage(message: AgentMessage): void {
-    this.messageLog.push(message);
-    
-    // Trim log if it gets too large
-    if (this.messageLog.length > this.MAX_LOG_SIZE) {
-      this.messageLog = this.messageLog.slice(-this.MAX_LOG_SIZE);
-    }
-  }
-  
-  /**
-   * Get recent messages (mainly for debugging)
-   */
-  public getRecentMessages(count: number = 100): AgentMessage[] {
-    return this.messageLog.slice(-count);
-  }
-  
-  /**
-   * Filter message log to find related messages
-   */
-  public getRelatedMessages(messageId: string): AgentMessage[] {
-    return this.messageLog.filter(
-      m => m.messageId === messageId || m.correlationId === messageId
+    return createErrorResponse(
+      originalMessage,
+      'error',
+      errorMessage
     );
-  }
-  
-  /**
-   * Clear all subscriptions
-   */
-  public clearSubscriptions(): void {
-    this.subscribers.clear();
   }
 }

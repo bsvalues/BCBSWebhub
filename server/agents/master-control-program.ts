@@ -1,10 +1,14 @@
 import { 
   AgentType, 
-  AgentMessage, 
-  MessageType, 
-  Priority,
-  AgentCommunicationBus 
+  AgentStatus,
+  AgentCommunicationBus,
+  TaskStatus
 } from "@shared/protocols/agent-communication";
+import {
+  AgentMessage,
+  MessageEventType as MessageType,
+  MessagePriority as Priority
+} from "@shared/protocols/message-protocol";
 import { BaseAgent, Task, Agent } from "./base-agent";
 import { DataValidationAgent } from "./data-validation-agent";
 import { ValuationAgent } from "./valuation-agent";

@@ -1,13 +1,21 @@
-import { BaseAgent, Task } from "./base-agent";
+import { BaseAgent } from "./base-agent";
 import { PropertyDataValidator } from "../validators/property-validator";
 import { DataQualityService } from "../services/data-quality";
 import { 
-  AgentType, 
-  AgentMessage, 
-  MessageType, 
-  Priority, 
-  AgentCommunicationBus
-} from "@shared/protocols/agent-communication";
+  AgentCommunicationBus,
+  AgentType,
+  AgentStatus,
+  Task,
+  TaskStatus
+} from "../../shared/protocols/agent-communication";
+import {
+  AgentMessage,
+  MessageEventType,
+  MessagePriority,
+  createMessage,
+  createSuccessResponse,
+  createErrorResponse
+} from "../../shared/protocols/message-protocol";
 import { db } from "../db";
 import { properties } from "@shared/washington-schema";
 import { eq } from "drizzle-orm";
@@ -19,6 +27,12 @@ interface ValidationResult {
   rule: string;
   message: string;
   severity: 'error' | 'warning' | 'info';
+}
+
+// Define a custom message type enum to extend the base message types
+enum ValidationMessageType {
+  VALIDATION_REQUEST = 'VALIDATION_REQUEST',
+  VALIDATION_RESPONSE = 'VALIDATION_RESPONSE'
 }
 
 // Define ValidationRequestMessage interface
@@ -41,21 +55,54 @@ export class DataValidationAgent extends BaseAgent {
   private validator: PropertyDataValidator;
   private dataQualityService: DataQualityService;
   
-  constructor(communicationBus: AgentCommunicationBus) {
-    super(
-      AgentType.DATA_VALIDATION, 
-      [
-        'data_validation',
-        'data_quality_analysis',
-        'washington_state_compliance',
-        'data_recommendation',
-        'batch_validation'
-      ],
-      communicationBus
-    );
+  constructor(agentId: string, communicationBus: AgentCommunicationBus, settings: Record<string, any> = {}) {
+    super(agentId, communicationBus, settings);
     
     this.validator = new PropertyDataValidator();
     this.dataQualityService = new DataQualityService();
+  }
+  
+  /**
+   * Agent-specific initialization logic
+   */
+  protected async onInitialize(): Promise<void> {
+    // Register this agent's capabilities with the MCP
+    await this.sendMessage(
+      AgentType.MCP,
+      MessageEventType.COMMAND,
+      {
+        commandName: 'registerCapabilities',
+        capabilities: [
+          'property_validation',
+          'data_quality_analysis',
+          'recommendation_generation',
+          'batch_validation'
+        ]
+      }
+    );
+    
+    // Initialize validator if needed
+    // No special initialization needed for now
+  }
+  
+  /**
+   * Agent-specific shutdown logic
+   */
+  protected async onShutdown(): Promise<void> {
+    // Notify MCP that this agent is shutting down
+    try {
+      await this.sendMessage(
+        AgentType.MCP,
+        MessageEventType.STATUS_UPDATE,
+        {
+          status: AgentStatus.SHUTTING_DOWN,
+          metrics: this.getStatusMetrics()
+        }
+      );
+    } catch (error) {
+      // If MCP is not available, just log the shutdown
+      // No need to rethrow since we're shutting down anyway
+    }
   }
   
   /**
@@ -81,24 +128,57 @@ export class DataValidationAgent extends BaseAgent {
   }
   
   /**
-   * Handle specialized messages specific to this agent
+   * Override for handling command messages specific to this agent
    */
-  protected async handleSpecializedMessage(message: AgentMessage): Promise<void> {
-    switch (message.messageType) {
-      case MessageType.VALIDATION_REQUEST:
-        await this.handleValidationRequest(message as ValidationRequestMessage);
-        break;
-        
-      default:
-        this.logger(`Unhandled message type ${message.messageType} in DataValidationAgent`);
+  protected async handleCommand(message: AgentMessage): Promise<void> {
+    const command = message.payload.commandName;
+    
+    // Set status to busy while processing the command
+    this.status = AgentStatus.BUSY;
+    this.broadcastStatus();
+    
+    try {
+      switch (command) {
+        case 'validateProperty':
+          await this.handleValidationRequest(message);
+          break;
+          
+        case 'analyzeDataQuality':
+          const qualityResult = await this.analyzeDataQuality(message.payload);
+          const successResponse = createSuccessResponse(message, qualityResult);
+          this.safeSendMessage(successResponse);
+          break;
+          
+        case 'generateRecommendations':
+          const recommendationsResult = await this.generateDataRecommendations(message.payload);
+          const recSuccessResponse = createSuccessResponse(message, recommendationsResult);
+          this.safeSendMessage(recSuccessResponse);
+          break;
+          
+        default:
+          // Use parent implementation for unknown commands
+          await super.handleCommand(message);
+      }
+    } catch (error) {
+      // Create an error response
+      const errorResponse = createErrorResponse(
+        message, 
+        'command_execution_error', 
+        (error as Error).message
+      );
+      this.safeSendMessage(errorResponse);
+    } finally {
+      // Reset status
+      this.status = AgentStatus.READY;
+      this.broadcastStatus();
     }
   }
   
   /**
    * Handle property validation request message
    */
-  private async handleValidationRequest(message: ValidationRequestMessage): Promise<void> {
-    const { propertyId, property } = message.payload;
+  private async handleValidationRequest(message: AgentMessage): Promise<void> {
+    const { propertyId, property, validateFields } = message.payload;
     
     try {
       let result;
@@ -113,33 +193,23 @@ export class DataValidationAgent extends BaseAgent {
         throw new Error("Either propertyId or property data is required for validation");
       }
       
-      // Extract relevant info from validation results
-      const isValid = result.isValid;
-      const validationResults = result.results;
-      const validationSummary = result.summary;
-      
-      // Send validation response
-      this.communicationBus.publish({
-        messageId: AgentCommunicationBus.createMessageId(),
-        timestamp: new Date(),
-        source: this.type,
-        destination: message.source,
-        messageType: MessageType.VALIDATION_RESPONSE,
-        priority: message.priority,
-        requiresResponse: false,
-        correlationId: message.messageId,
-        payload: {
-          propertyId: propertyId || property?.id,
-          isValid,
-          validationResults,
-          validationSummary
-        }
+      // Send successful response
+      const response = createSuccessResponse(message, {
+        propertyId: propertyId || property?.id,
+        isValid: result.isValid,
+        validationResults: result.results,
+        validationSummary: result.summary
       });
+      
+      this.safeSendMessage(response);
     } catch (error) {
       // Send error response
-      this.communicationBus.publish(
-        AgentCommunicationBus.createErrorResponse(message, error)
+      const errorResponse = createErrorResponse(
+        message,
+        'validation_error',
+        (error as Error).message
       );
+      this.safeSendMessage(errorResponse);
     }
   }
   

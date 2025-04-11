@@ -1,544 +1,372 @@
+/**
+ * Base Agent
+ * 
+ * Defines the foundation for all agent types in the system.
+ * Provides common functionality and a standardized interface.
+ */
+
 import { 
-  AgentType, 
-  AgentMessage, 
-  MessageType, 
-  Priority,
   AgentCommunicationBus,
+  AgentType,
   AgentStatus,
   Task,
-  Agent
-} from "@shared/protocols/agent-communication";
+  TaskStatus
+} from '../../shared/protocols/agent-communication';
+import {
+  AgentMessage,
+  MessageEventType,
+  MessagePriority,
+  createMessage,
+  createSuccessResponse,
+  createErrorResponse
+} from '../../shared/protocols/message-protocol';
+import { logger } from '../utils/logger';
 
-/**
- * Base Agent Class
- * 
- * Provides common functionality for all agents in the system.
- * All specialized agents should extend this class.
- */
-export abstract class BaseAgent implements Agent {
-  protected running: boolean = false;
-  protected tasks: Map<string, Task> = new Map();
-  protected startTime: number = 0;
-  protected lastActivityTime: number = 0;
-  protected unsubscribeFunction: (() => void) | null = null;
+// Base Agent abstract class
+export abstract class BaseAgent {
+  protected agentId: string;
+  protected communicationBus: AgentCommunicationBus;
+  protected status: AgentStatus = AgentStatus.INITIALIZING;
+  protected settings: Record<string, any>;
+  protected isShuttingDown: boolean = false;
+  protected messageHandlers: Map<string, (message: AgentMessage) => Promise<void>> = new Map();
   
-  public readonly type: string;
-  public readonly capabilities: string[];
-  public readonly communicationBus: AgentCommunicationBus;
+  constructor(agentId: string, communicationBus: AgentCommunicationBus, settings: Record<string, any> = {}) {
+    this.agentId = agentId;
+    this.communicationBus = communicationBus;
+    this.settings = settings;
+    
+    // Register with the communication bus
+    if (typeof this.communicationBus.registerAgent === 'function') {
+      this.communicationBus.registerAgent(this.agentId);
+    } else {
+      logger.warn(`Agent ${this.agentId}: registerAgent not available on communication bus`);
+    }
+    
+    // Subscribe to messages for this agent
+    if (typeof this.communicationBus.subscribeToAgent === 'function') {
+      this.communicationBus.subscribeToAgent(this.agentId, this.handleMessage.bind(this));
+    } else {
+      logger.warn(`Agent ${this.agentId}: subscribeToAgent not available on communication bus`);
+    }
+    
+    // Register message handlers
+    this.registerMessageHandlers();
+    
+    logger.info(`Agent ${this.agentId} created`);
+  }
   
   /**
-   * Constructor
+   * Register message handlers for different message types
    */
-  constructor(type: string, capabilities: string[], communicationBus: AgentCommunicationBus) {
-    this.type = type;
-    this.capabilities = capabilities || [];
-    this.communicationBus = communicationBus;
+  protected registerMessageHandlers(): void {
+    this.messageHandlers.set(MessageEventType.COMMAND, this.handleCommand.bind(this));
+    this.messageHandlers.set(MessageEventType.QUERY, this.handleQuery.bind(this));
+    this.messageHandlers.set(MessageEventType.EVENT, this.handleEvent.bind(this));
+    this.messageHandlers.set(MessageEventType.ASSISTANCE_REQUESTED, this.handleAssistanceRequest.bind(this));
   }
   
   /**
    * Initialize the agent
    */
   public async initialize(): Promise<void> {
-    if (this.running) {
-      return;
+    logger.info(`Initializing agent ${this.agentId}`);
+    
+    try {
+      // Call the agent-specific initialization method
+      await this.onInitialize();
+      
+      // Update status
+      this.status = AgentStatus.READY;
+      
+      // Broadcast status update
+      this.broadcastStatus();
+      
+      logger.info(`Agent ${this.agentId} initialized successfully`);
+    } catch (error) {
+      this.status = AgentStatus.ERROR;
+      logger.error(`Failed to initialize agent ${this.agentId}:`, error);
+      throw error;
     }
-    
-    this.startTime = Date.now();
-    this.lastActivityTime = this.startTime;
-    this.running = true;
-    
-    // Subscribe to messages
-    this.unsubscribeFunction = this.communicationBus.subscribe(
-      this.type, 
-      this.handleMessage.bind(this)
-    );
-    
-    this.logger(`Agent initialized: ${this.type}`);
-    
-    // Send registration message
-    await this.sendRegistration();
-    
-    // Start status updates
-    this.startStatusUpdates();
   }
   
   /**
    * Shutdown the agent
    */
   public async shutdown(): Promise<void> {
-    if (!this.running) {
+    if (this.isShuttingDown) {
       return;
     }
     
-    this.running = false;
-    
-    // Unsubscribe from messages
-    if (this.unsubscribeFunction) {
-      this.unsubscribeFunction();
-      this.unsubscribeFunction = null;
-    }
-    
-    // Clean up any pending tasks
-    for (const task of this.tasks.values()) {
-      if (!task.completedAt) {
-        task.completedAt = new Date();
-        task.error = { message: 'Agent shutdown' };
-      }
-    }
-    
-    this.logger(`Agent shutdown: ${this.type}`);
-  }
-  
-  /**
-   * Get the agent's status
-   */
-  public getStatus(): AgentStatus {
-    const pendingTasks = Array.from(this.tasks.values())
-      .filter(t => !t.assignedAt && !t.completedAt).length;
-    
-    const processingTasks = Array.from(this.tasks.values())
-      .filter(t => t.assignedAt && !t.completedAt).length;
-    
-    const completedTasks = Array.from(this.tasks.values())
-      .filter(t => t.completedAt && !t.error).length;
-    
-    const failedTasks = Array.from(this.tasks.values())
-      .filter(t => t.completedAt && t.error).length;
-    
-    return {
-      status: this.running ? 'running' : 'stopped',
-      uptime: this.startTime > 0 ? Date.now() - this.startTime : 0,
-      taskCount: {
-        pending: pendingTasks,
-        processing: processingTasks,
-        completed: completedTasks,
-        failed: failedTasks
-      },
-      lastActiveTime: new Date(this.lastActivityTime),
-      metrics: this.getMetrics()
-    };
-  }
-  
-  /**
-   * Send a message
-   */
-  public sendMessage(message: AgentMessage): void {
-    this.communicationBus.publish(message);
-    this.lastActivityTime = Date.now();
-  }
-  
-  /**
-   * Add a task to the agent
-   */
-  public async addTask(task: Task): Promise<void> {
-    if (!this.running) {
-      throw new Error(`Agent not running: ${this.type}`);
-    }
-    
-    // Store the task
-    this.tasks.set(task.id, task);
-    this.lastActivityTime = Date.now();
-    
-    // Process the task
-    try {
-      // Mark as assigned
-      task.assignedAt = new Date();
-      
-      // Execute the task
-      const result = await this.executeTask(task);
-      
-      // Mark as completed
-      task.completedAt = new Date();
-      task.result = result;
-    } catch (error) {
-      // Mark as failed
-      task.completedAt = new Date();
-      task.error = {
-        message: error.message || 'Unknown error',
-        stack: error.stack,
-        details: error
-      };
-      
-      this.logger(`Task execution failed: ${task.id} - ${error.message}`);
-    }
-  }
-  
-  /**
-   * Execute a task (abstract method to be implemented by subclasses)
-   */
-  protected abstract executeTask(task: Task): Promise<any>;
-  
-  /**
-   * Handle a message from the communication bus
-   */
-  private async handleMessage(message: AgentMessage): Promise<void> {
-    this.lastActivityTime = Date.now();
+    logger.info(`Shutting down agent ${this.agentId}`);
+    this.isShuttingDown = true;
+    this.status = AgentStatus.SHUTTING_DOWN;
     
     try {
-      // Process system messages
-      switch (message.messageType) {
-        case MessageType.STATUS_UPDATE:
-          await this.handleStatusUpdate(message);
-          break;
-          
-        case MessageType.ERROR_REPORT:
-          await this.handleErrorReport(message);
-          break;
-          
-        case MessageType.HEARTBEAT:
-          await this.handleHeartbeat(message);
-          break;
-          
-        case MessageType.SHUTDOWN:
-          await this.handleShutdown(message);
-          break;
-          
-        case MessageType.TASK_REQUEST:
-          await this.handleTaskRequest(message);
-          break;
-          
-        case MessageType.TASK_CANCEL:
-          await this.handleTaskCancel(message);
-          break;
-          
-        default:
-          // Let the specialized agent handle it
-          await this.handleSpecializedMessage(message);
+      // Call the agent-specific shutdown method
+      await this.onShutdown();
+      
+      // Unsubscribe from the communication bus
+      if (typeof this.communicationBus.unsubscribeFromAgent === 'function') {
+        this.communicationBus.unsubscribeFromAgent(this.agentId, this.handleMessage.bind(this));
+      } else {
+        logger.warn(`Agent ${this.agentId}: unsubscribeFromAgent not available on communication bus`);
+      }
+      
+      // Unregister from the communication bus
+      if (typeof this.communicationBus.unregisterAgent === 'function') {
+        this.communicationBus.unregisterAgent(this.agentId);
+      } else {
+        logger.warn(`Agent ${this.agentId}: unregisterAgent not available on communication bus`);
+      }
+      
+      logger.info(`Agent ${this.agentId} shut down successfully`);
+    } catch (error) {
+      logger.error(`Error during shutdown of agent ${this.agentId}:`, error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Handle an incoming message
+   */
+  protected async handleMessage(message: AgentMessage): Promise<void> {
+    logger.debug(`Agent ${this.agentId} received message: ${message.messageId} of type ${message.eventType}`);
+    
+    // Don't process new messages if shutting down
+    if (this.isShuttingDown) {
+      const errorResponse = createErrorResponse(
+        message,
+        'agent_shutting_down',
+        `Agent ${this.agentId} is shutting down and cannot process new messages`
+      );
+      this.safeSendMessage(errorResponse);
+      return;
+    }
+    
+    try {
+      // Route to the appropriate handler based on event type
+      const handler = this.messageHandlers.get(message.eventType);
+      
+      if (handler) {
+        await handler(message);
+      } else {
+        logger.warn(`No handler registered for message type ${message.eventType}`);
+        
+        // Only send error response if it's not already a response
+        if (message.eventType !== MessageEventType.RESPONSE) {
+          const errorResponse = createErrorResponse(
+            message,
+            'unknown_message_type',
+            `Agent ${this.agentId} does not handle messages of type ${message.eventType}`
+          );
+          this.safeSendMessage(errorResponse);
+        }
       }
     } catch (error) {
-      this.logger(`Error handling message: ${error.message}`);
+      logger.error(`Error handling message ${message.messageId} in agent ${this.agentId}:`, error);
       
-      // Send error response if response is required
-      if (message.requiresResponse) {
-        this.sendMessage({
-          messageId: AgentCommunicationBus.createMessageId(),
-          timestamp: new Date(),
-          source: this.type,
-          destination: message.source,
-          messageType: MessageType.ERROR_REPORT,
-          priority: Priority.HIGH,
-          requiresResponse: false,
-          correlationId: message.messageId,
-          payload: {
-            error: error.message || 'Unknown error',
-            details: error
-          }
-        });
+      // Send error response if not already a response
+      if (message.eventType !== MessageEventType.RESPONSE) {
+        const errorResponse = createErrorResponse(
+          message,
+          'message_handling_error',
+          `Error processing message: ${(error as Error).message}`
+        );
+        this.safeSendMessage(errorResponse);
       }
     }
   }
   
   /**
-   * Handle specialized messages (to be implemented by subclasses)
+   * Handle a command message
    */
-  protected async handleSpecializedMessage(message: AgentMessage): Promise<void> {
-    // Default implementation just logs the message
-    this.logger(`Unhandled message type: ${message.messageType}`);
+  protected async handleCommand(message: AgentMessage): Promise<void> {
+    const command = message.payload.commandName;
+    logger.debug(`Agent ${this.agentId} handling command: ${command}`);
+    
+    // Set status to busy while processing the command
+    this.status = AgentStatus.BUSY;
+    this.broadcastStatus();
+    
+    try {
+      // Default implementation just responds with an error
+      const errorResponse = createErrorResponse(
+        message,
+        'command_not_supported',
+        `Command ${command} is not supported by agent ${this.agentId}`
+      );
+      this.safeSendMessage(errorResponse);
+    } finally {
+      // Reset status
+      this.status = AgentStatus.READY;
+      this.broadcastStatus();
+    }
   }
   
   /**
-   * Handle status update message
+   * Handle a query message
+   */
+  protected async handleQuery(message: AgentMessage): Promise<void> {
+    const queryType = message.payload.queryType;
+    logger.debug(`Agent ${this.agentId} handling query: ${queryType}`);
+    
+    // Set status to busy while processing the query
+    this.status = AgentStatus.BUSY;
+    this.broadcastStatus();
+    
+    try {
+      // Default implementation just responds with an error
+      const errorResponse = createErrorResponse(
+        message,
+        'query_not_supported',
+        `Query ${queryType} is not supported by agent ${this.agentId}`
+      );
+      this.safeSendMessage(errorResponse);
+    } finally {
+      // Reset status
+      this.status = AgentStatus.READY;
+      this.broadcastStatus();
+    }
+  }
+  
+  /**
+   * Handle an event message
+   */
+  protected async handleEvent(message: AgentMessage): Promise<void> {
+    const eventName = message.payload.eventName;
+    logger.debug(`Agent ${this.agentId} handling event: ${eventName}`);
+    
+    // Default implementation does nothing, no response required for events
+    // Subclasses should override this method if they need to react to events
+  }
+  
+  /**
+   * Handle a response message
+   */
+  protected async handleResponse(message: AgentMessage): Promise<void> {
+    logger.debug(`Agent ${this.agentId} received response to message ${message.correlationId}`);
+    
+    // Default implementation does nothing
+    // The communication bus takes care of routing responses to their requesters
+    // Subclasses can override this if they need custom response handling
+  }
+  
+  /**
+   * Handle a status update message
    */
   protected async handleStatusUpdate(message: AgentMessage): Promise<void> {
-    // Just acknowledge receipt if response is required
-    if (message.requiresResponse) {
-      this.sendMessage({
-        messageId: AgentCommunicationBus.createMessageId(),
-        timestamp: new Date(),
-        source: this.type,
-        destination: message.source,
-        messageType: MessageType.STATUS_UPDATE_RESPONSE,
-        priority: Priority.LOW,
-        requiresResponse: false,
-        correlationId: message.messageId,
-        payload: { received: true }
-      });
+    logger.debug(`Agent ${this.agentId} received status update: ${message.payload.status}`);
+    
+    // Default implementation does nothing
+    // Subclasses can override this if they need to react to status updates
+  }
+  
+  /**
+   * Handle an assistance request message
+   */
+  protected async handleAssistanceRequest(message: AgentMessage): Promise<void> {
+    const issueType = message.payload.issueType;
+    const description = message.payload.description;
+    
+    logger.debug(`Agent ${this.agentId} received assistance request: ${issueType}`);
+    
+    // Default implementation just responds with an error
+    const errorResponse = createErrorResponse(
+      message,
+      'assistance_not_provided',
+      `Agent ${this.agentId} cannot provide assistance for ${issueType}`
+    );
+    this.safeSendMessage(errorResponse);
+  }
+  
+  /**
+   * Safely send a message through the communication bus
+   */
+  protected safeSendMessage(message: AgentMessage): void {
+    if (typeof this.communicationBus.sendMessage === 'function') {
+      this.communicationBus.sendMessage(message);
+    } else {
+      logger.warn(`Agent ${this.agentId}: sendMessage not available on communication bus`);
     }
   }
   
   /**
-   * Handle error report message
+   * Send a message to another agent
    */
-  protected async handleErrorReport(message: AgentMessage): Promise<void> {
-    const { error, details } = message.payload;
-    this.logger(`Error report from ${message.source}: ${error}`);
-    
-    // Just acknowledge receipt if response is required
-    if (message.requiresResponse) {
-      this.sendMessage({
-        messageId: AgentCommunicationBus.createMessageId(),
-        timestamp: new Date(),
-        source: this.type,
-        destination: message.source,
-        messageType: MessageType.STATUS_UPDATE_RESPONSE,
-        priority: Priority.LOW,
-        requiresResponse: false,
-        correlationId: message.messageId,
-        payload: { received: true }
-      });
-    }
-  }
-  
-  /**
-   * Handle heartbeat message
-   */
-  protected async handleHeartbeat(message: AgentMessage): Promise<void> {
-    // Just send back a heartbeat response
-    if (message.requiresResponse) {
-      this.sendMessage({
-        messageId: AgentCommunicationBus.createMessageId(),
-        timestamp: new Date(),
-        source: this.type,
-        destination: message.source,
-        messageType: MessageType.HEARTBEAT,
-        priority: Priority.LOW,
-        requiresResponse: false,
-        correlationId: message.messageId,
-        payload: { timestamp: new Date() }
-      });
-    }
-  }
-  
-  /**
-   * Handle shutdown message
-   */
-  protected async handleShutdown(message: AgentMessage): Promise<void> {
-    this.logger(`Shutdown requested by ${message.source}`);
-    
-    // Acknowledge receipt before shutting down
-    if (message.requiresResponse) {
-      this.sendMessage({
-        messageId: AgentCommunicationBus.createMessageId(),
-        timestamp: new Date(),
-        source: this.type,
-        destination: message.source,
-        messageType: MessageType.STATUS_UPDATE,
-        priority: Priority.HIGH,
-        requiresResponse: false,
-        correlationId: message.messageId,
-        payload: { 
-          status: 'stopping',
-          message: 'Shutdown in progress'
-        }
-      });
-    }
-    
-    // Shut down the agent
-    await this.shutdown();
-  }
-  
-  /**
-   * Handle task request message
-   */
-  protected async handleTaskRequest(message: AgentMessage): Promise<void> {
-    const { taskId, taskType, parameters } = message.payload;
-    
-    this.logger(`Task request received: ${taskType} (${taskId})`);
-    
-    // Create a new task
-    const task: Task = {
-      id: taskId,
-      type: taskType,
-      parameters: parameters || {},
-      priority: message.priority,
-      createdAt: new Date()
-    };
+  protected async sendMessage(
+    targetAgentId: string,
+    eventType: MessageEventType,
+    payload: any,
+    priority: MessagePriority = MessagePriority.MEDIUM
+  ): Promise<AgentMessage> {
+    const message = createMessage(
+      this.agentId,
+      targetAgentId,
+      eventType,
+      payload,
+      { priority }
+    );
     
     try {
-      // Execute the task
-      await this.addTask(task);
-      
-      // Send response
-      this.sendMessage({
-        messageId: AgentCommunicationBus.createMessageId(),
-        timestamp: new Date(),
-        source: this.type,
-        destination: message.source,
-        messageType: MessageType.TASK_RESPONSE,
-        priority: message.priority,
-        requiresResponse: false,
-        correlationId: message.messageId,
-        payload: {
-          taskId,
-          status: task.error ? 'error' : 'success',
-          result: task.result,
-          errorDetails: task.error
-        }
-      });
+      if (typeof this.communicationBus.sendMessageWithResponse === 'function') {
+        const response = await this.communicationBus.sendMessageWithResponse(message);
+        return response;
+      } else {
+        logger.warn(`Agent ${this.agentId}: sendMessageWithResponse not available on communication bus`);
+        throw new Error('Communication bus does not support sendMessageWithResponse');
+      }
     } catch (error) {
-      // Send error response
-      this.sendMessage({
-        messageId: AgentCommunicationBus.createMessageId(),
-        timestamp: new Date(),
-        source: this.type,
-        destination: message.source,
-        messageType: MessageType.TASK_RESPONSE,
-        priority: message.priority,
-        requiresResponse: false,
-        correlationId: message.messageId,
-        payload: {
-          taskId,
-          status: 'error',
-          errorDetails: {
-            message: error.message || 'Unknown error',
-            stack: error.stack,
-            details: error
-          }
-        }
-      });
+      logger.error(`Error sending message to ${targetAgentId}:`, error);
+      throw error;
     }
   }
   
   /**
-   * Handle task cancel message
+   * Broadcast a status update
    */
-  protected async handleTaskCancel(message: AgentMessage): Promise<void> {
-    const { taskId } = message.payload;
+  protected broadcastStatus(): void {
+    const statusMessage = createMessage(
+      this.agentId,
+      'broadcast',
+      MessageEventType.STATUS_UPDATE,
+      {
+        status: this.status,
+        metrics: this.getStatusMetrics()
+      }
+    );
     
-    this.logger(`Task cancellation requested: ${taskId}`);
-    
-    // Check if we have this task
-    if (this.tasks.has(taskId)) {
-      const task = this.tasks.get(taskId)!;
-      
-      // If it's not completed yet, mark it as cancelled
-      if (!task.completedAt) {
-        task.completedAt = new Date();
-        task.error = { message: 'Task cancelled' };
-        
-        this.logger(`Task cancelled: ${taskId}`);
-      }
-      
-      // Send response
-      if (message.requiresResponse) {
-        this.sendMessage({
-          messageId: AgentCommunicationBus.createMessageId(),
-          timestamp: new Date(),
-          source: this.type,
-          destination: message.source,
-          messageType: MessageType.TASK_RESPONSE,
-          priority: message.priority,
-          requiresResponse: false,
-          correlationId: message.messageId,
-          payload: {
-            taskId,
-            status: 'cancelled'
-          }
-        });
-      }
-    } else {
-      // Task not found
-      if (message.requiresResponse) {
-        this.sendMessage({
-          messageId: AgentCommunicationBus.createMessageId(),
-          timestamp: new Date(),
-          source: this.type,
-          destination: message.source,
-          messageType: MessageType.TASK_RESPONSE,
-          priority: message.priority,
-          requiresResponse: false,
-          correlationId: message.messageId,
-          payload: {
-            taskId,
-            status: 'error',
-            errorDetails: { message: 'Task not found' }
-          }
-        });
-      }
-    }
+    this.safeSendMessage(statusMessage);
   }
   
   /**
-   * Send registration message
+   * Get status metrics for this agent
    */
-  protected async sendRegistration(): Promise<void> {
-    this.sendMessage({
-      messageId: AgentCommunicationBus.createMessageId(),
-      timestamp: new Date(),
-      source: this.type,
-      destination: AgentType.MCP,
-      messageType: MessageType.AGENT_REGISTRATION,
-      priority: Priority.HIGH,
-      requiresResponse: true,
-      payload: {
-        agentType: this.type,
-        capabilities: this.capabilities,
-        status: 'running'
-      }
-    });
-  }
-  
-  /**
-   * Start periodic status updates
-   */
-  protected startStatusUpdates(): void {
-    // Send an initial status update
-    this.sendStatusUpdate();
-    
-    // Schedule periodic status updates (every 30 seconds)
-    setInterval(() => {
-      if (this.running) {
-        this.sendStatusUpdate();
-      }
-    }, 30000);
-  }
-  
-  /**
-   * Send a status update
-   */
-  protected sendStatusUpdate(): void {
-    this.sendMessage({
-      messageId: AgentCommunicationBus.createMessageId(),
-      timestamp: new Date(),
-      source: this.type,
-      destination: AgentType.MCP,
-      messageType: MessageType.STATUS_UPDATE,
-      priority: Priority.LOW,
-      requiresResponse: false,
-      payload: this.getStatus()
-    });
-  }
-  
-  /**
-   * Get additional metrics
-   */
-  protected getMetrics(): any {
+  protected getStatusMetrics(): Record<string, any> {
+    // Base implementation just returns basic info
+    // Subclasses should override to provide more detailed metrics
     return {
-      taskQueueLength: this.tasks.size,
-      pendingTasks: Array.from(this.tasks.values())
-        .filter(t => !t.assignedAt && !t.completedAt).length,
-      processingTasks: Array.from(this.tasks.values())
-        .filter(t => t.assignedAt && !t.completedAt).length,
-      completedTasks: Array.from(this.tasks.values())
-        .filter(t => t.completedAt && !t.error).length,
-      failedTasks: Array.from(this.tasks.values())
-        .filter(t => t.completedAt && t.error).length,
-      avgTaskDuration: this.calculateAverageTaskDuration()
+      status: this.status,
+      uptime: process.uptime()
     };
   }
   
   /**
-   * Calculate average task duration
+   * Get the current status of the agent
    */
-  protected calculateAverageTaskDuration(): number {
-    const completedTasks = Array.from(this.tasks.values())
-      .filter(t => t.completedAt && t.assignedAt);
-    
-    if (completedTasks.length === 0) {
-      return 0;
-    }
-    
-    const totalDuration = completedTasks.reduce((sum, task) => {
-      return sum + (task.completedAt!.getTime() - task.assignedAt!.getTime());
-    }, 0);
-    
-    return totalDuration / completedTasks.length;
+  public getStatus(): AgentStatus {
+    return this.status;
   }
   
   /**
-   * Logger function
+   * Agent-specific initialization logic
+   * Subclasses must implement this method
    */
-  protected logger(message: string): void {
-    console.log(`[${this.type}] ${message}`);
-  }
+  protected abstract onInitialize(): Promise<void>;
+  
+  /**
+   * Agent-specific shutdown logic
+   * Subclasses must implement this method
+   */
+  protected abstract onShutdown(): Promise<void>;
 }

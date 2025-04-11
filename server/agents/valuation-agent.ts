@@ -1,19 +1,29 @@
 import { PropertyComparableService } from "../services/property-comparables";
 import { AnomalyDetectionService } from "../services/anomaly-detection";
-import { BaseAgent, Task } from "./base-agent";
+import { BaseAgent } from "./base-agent";
 import { 
   AgentType, 
-  AgentMessage, 
-  MessageType, 
-  Priority,
-  StatusCode, 
-  AgentCommunicationBus, 
-  ValuationRequestMessage
+  AgentStatus,
+  AgentCommunicationBus,
+  Task
 } from "@shared/protocols/agent-communication";
+import {
+  AgentMessage,
+  MessageEventType,
+  MessagePriority,
+  createMessage,
+  createSuccessResponse,
+  createErrorResponse,
+  ValuationRequestMessage,
+  ValuationResponsePayload,
+  ComparableRequestPayload,
+  AnomalyDetectionRequestPayload
+} from "@shared/protocols/message-protocol";
 import { Property } from "@shared/washington-schema";
 import { db } from "../db";
 import { eq } from "drizzle-orm";
 import { properties as propertiesTable } from "@shared/washington-schema";
+import { logger } from '../utils/logger';
 
 /**
  * Valuation Agent
@@ -26,22 +36,56 @@ export class ValuationAgent extends BaseAgent {
   private comparableService: PropertyComparableService;
   private anomalyDetector: AnomalyDetectionService;
   
-  constructor(communicationBus: AgentCommunicationBus) {
-    super(
-      AgentType.VALUATION, 
-      [
-        'property_valuation',
-        'comparable_analysis',
-        'anomaly_detection',
-        'trend_analysis',
-        'assessment_calculation',
-        'washington_state_compliance'
-      ],
-      communicationBus
-    );
+  constructor(agentId: string, communicationBus: AgentCommunicationBus, settings: Record<string, any> = {}) {
+    super(agentId, communicationBus, settings);
     
     this.comparableService = new PropertyComparableService();
     this.anomalyDetector = new AnomalyDetectionService();
+  }
+  
+  /**
+   * Agent-specific initialization logic
+   */
+  protected async onInitialize(): Promise<void> {
+    // Register this agent's capabilities with the MCP
+    await this.sendMessage(
+      AgentType.MCP,
+      MessageEventType.COMMAND,
+      {
+        commandName: 'registerCapabilities',
+        capabilities: [
+          'property_valuation',
+          'comparable_analysis',
+          'anomaly_detection',
+          'trend_analysis',
+          'assessment_calculation',
+          'washington_state_compliance'
+        ]
+      }
+    );
+    
+    // Initialize services if needed
+    // Currently no special initialization needed
+  }
+  
+  /**
+   * Agent-specific shutdown logic
+   */
+  protected async onShutdown(): Promise<void> {
+    // Notify MCP that this agent is shutting down
+    try {
+      await this.sendMessage(
+        AgentType.MCP,
+        MessageEventType.STATUS_UPDATE,
+        {
+          status: AgentStatus.SHUTTING_DOWN,
+          metrics: this.getStatusMetrics()
+        }
+      );
+    } catch (error) {
+      // If MCP is not available, just log the shutdown
+      // No need to rethrow since we're shutting down anyway
+    }
   }
   
   /**
@@ -73,21 +117,21 @@ export class ValuationAgent extends BaseAgent {
    * Handle specialized messages specific to this agent
    */
   protected async handleSpecializedMessage(message: AgentMessage): Promise<void> {
-    switch (message.messageType) {
-      case MessageType.VALUATION_REQUEST:
+    switch (message.eventType) {
+      case MessageEventType.VALUATION_REQUEST:
         await this.handleValuationRequest(message as ValuationRequestMessage);
         break;
         
-      case MessageType.COMPARABLE_REQUEST:
+      case MessageEventType.COMPARABLE_REQUEST:
         await this.handleComparableRequest(message);
         break;
         
-      case MessageType.ANOMALY_DETECTION_REQUEST:
+      case MessageEventType.ANOMALY_DETECTION_REQUEST:
         await this.handleAnomalyDetectionRequest(message);
         break;
         
       default:
-        this.logger(`Unhandled message type ${message.messageType} in ValuationAgent`);
+        logger.debug(`Unhandled message type ${message.eventType} in ValuationAgent`);
     }
   }
   
@@ -127,28 +171,20 @@ export class ValuationAgent extends BaseAgent {
       });
       
       // Send valuation response
-      this.communicationBus.publish({
-        messageId: AgentCommunicationBus.createMessageId(),
-        timestamp: new Date(),
-        source: this.type,
-        destination: message.source,
-        messageType: MessageType.VALUATION_RESPONSE,
-        priority: message.priority,
-        requiresResponse: false,
-        correlationId: message.messageId,
-        payload: {
-          propertyId: property.id,
-          parcelNumber: property.parcelNumber,
-          valuationDate: valuationDate || new Date(),
-          assessmentYear: valuationContext?.assessmentYear || new Date().getFullYear(),
-          valuationResult
-        }
-      });
+      const responsePayload = {
+        propertyId: property.id,
+        parcelNumber: property.parcelNumber,
+        valuationDate: valuationDate || new Date(),
+        assessmentYear: valuationContext?.assessmentYear || new Date().getFullYear(),
+        valuationResult
+      };
+      
+      const response = createSuccessResponse(message, responsePayload);
+      this.communicationBus.sendMessage(response);
     } catch (error) {
       // Send error response
-      this.communicationBus.publish(
-        AgentCommunicationBus.createErrorResponse(message, error)
-      );
+      const errorResponse = createErrorResponse(message, 'valuation_error', (error as Error).message);
+      this.communicationBus.sendMessage(errorResponse);
     }
   }
   
@@ -164,24 +200,18 @@ export class ValuationAgent extends BaseAgent {
         ...options
       });
       
-      this.communicationBus.publish({
-        messageId: AgentCommunicationBus.createMessageId(),
-        timestamp: new Date(),
-        source: this.type,
-        destination: message.source,
-        messageType: MessageType.COMPARABLE_RESPONSE,
-        priority: message.priority,
-        requiresResponse: false,
-        correlationId: message.messageId,
-        payload: {
-          propertyId,
-          result
-        }
-      });
+      // Send comparable response
+      const responsePayload = {
+        propertyId,
+        result
+      };
+      
+      const response = createSuccessResponse(message, responsePayload);
+      this.communicationBus.sendMessage(response);
     } catch (error) {
-      this.communicationBus.publish(
-        AgentCommunicationBus.createErrorResponse(message, error)
-      );
+      // Send error response
+      const errorResponse = createErrorResponse(message, 'comparable_error', (error as Error).message);
+      this.communicationBus.sendMessage(errorResponse);
     }
   }
   
