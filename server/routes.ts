@@ -11,6 +11,7 @@ import path from "path";
 import fs from "fs";
 import { randomUUID } from "crypto";
 import { db } from "./db";
+import agentRoutes from "./routes/agent-routes";
 
 // Define a common error handler for API routes
 const handleApiError = (res: Response, error: any) => {
