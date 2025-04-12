@@ -1,355 +1,300 @@
 /**
- * Enhanced Agent Communication Protocol
+ * Enhanced Agent Communication
  * 
- * Extends the base agent communication protocol with improved reliability:
- * - Circuit breaker integration
- * - Message delivery monitoring
- * - Delivery confirmations
- * - Priority-based message handling
+ * Provides enhanced communication capabilities with circuit-breaker
+ * pattern integration and resilience features.
  */
 
-import {
-  AgentMessage,
-  MessageEventType,
-  createMessage,
-  createSuccessResponse,
-  createErrorResponse
-} from './message-protocol';
-
-import {
+import { 
   AgentCommunicationBus,
-  AgentStatus,
-  AgentType,
-  Task,
-  TaskPriority,
-  TaskStatus
+  AgentMessage,
+  MessageEventType
 } from './agent-communication';
 
-// Re-export base types
-export {
-  AgentMessage,
-  MessageEventType,
-  AgentStatus,
-  AgentType,
-  Task,
-  TaskPriority,
-  TaskStatus,
-  createMessage,
-  createSuccessResponse,
-  createErrorResponse
-};
+import {
+  EnhancedMessageEventType,
+  createHealthCheckMessage,
+  createHealthResponseMessage,
+  createCircuitBreakerStatusMessage
+} from './enhanced-message-protocol';
 
-// Extended agent status with more detailed health information
-export enum EnhancedAgentStatus {
-  OFFLINE = 'OFFLINE',         // Agent is not running
-  INITIALIZING = 'INITIALIZING', // Agent is starting up
-  READY = 'READY',             // Agent is ready to process messages/tasks
-  BUSY = 'BUSY',               // Agent is processing a message/task
-  DEGRADED = 'DEGRADED',       // Agent is running but with limited functionality
-  ERROR = 'ERROR',             // Agent has encountered an error
-  SHUTTING_DOWN = 'SHUTTING_DOWN', // Agent is in the process of shutting down
-  CIRCUIT_OPEN = 'CIRCUIT_OPEN'  // Circuit breaker is open for this agent
-}
+import { CircuitBreakerRegistry } from '../../server/utils/circuit-breaker-registry';
+import { log } from '../../server/vite';
 
-// Message delivery options
-export interface DeliveryOptions {
-  priority?: 'high' | 'normal' | 'low';
-  timeout?: number;  // Timeout in milliseconds
-  retries?: number;  // Number of retry attempts
-  retryDelay?: number; // Delay between retries in milliseconds
-  requireConfirmation?: boolean; // Whether to wait for delivery confirmation
-}
-
-// Message delivery result
-export interface DeliveryResult {
+/**
+ * Result of sending a message through the enhanced bus
+ */
+export interface MessageSendResult {
   success: boolean;
-  messageId: string;
-  destination: string;
-  sentAt: Date;
-  deliveredAt?: Date;
+  messageId?: string;
   error?: string;
-  retryCount?: number;
+  circuitOpen?: boolean;
 }
 
-// Interface for the enhanced communication bus
-export interface EnhancedAgentCommunicationBus {
-  // Send a message with enhanced delivery options
-  sendMessage(
-    message: AgentMessage,
-    options?: DeliveryOptions
-  ): Promise<DeliveryResult>;
-  
-  // Send a message and wait for a response
-  sendMessageWithResponse(
-    message: AgentMessage,
-    options?: DeliveryOptions
-  ): Promise<AgentMessage>;
-  
-  // Register a message handler for a specific event type
-  registerHandler(
-    eventType: MessageEventType | string,
-    handler: (message: AgentMessage) => Promise<void> | void
-  ): void;
-  
-  // Broadcast a message to all agents or a specific group
-  broadcast(
-    message: AgentMessage,
-    filter?: (agentId: string) => boolean
-  ): Promise<DeliveryResult[]>;
-  
-  // Get the health status of all connected agents
-  getAgentsHealth(): Promise<Record<string, any>>;
-  
-  // Get the circuit breaker status for all agents
-  getCircuitBreakersStatus(): Promise<Record<string, any>>;
-  
-  // Reset a circuit breaker for a specific agent
-  resetCircuitBreaker(agentId: string): Promise<boolean>;
-  
-  // Disconnect from the communication bus
-  disconnect(): Promise<void>;
-}
-
-// Enhanced communication bus implementation
-export class EnhancedCommunicationBus implements EnhancedAgentCommunicationBus {
+/**
+ * Enhanced communication bus that integrates circuit breaker pattern
+ */
+export class EnhancedCommunicationBus {
   private baseBus: AgentCommunicationBus;
-  private circuitBreakerRegistry: any; // We'll inject this
-  private messageHandlers: Map<string, ((message: AgentMessage) => Promise<void> | void)[]> = new Map();
-  private pendingResponses: Map<string, { 
-    resolve: (message: AgentMessage) => void;
-    reject: (error: Error) => void;
-    timer: NodeJS.Timeout;
-  }> = new Map();
+  private circuitBreakerRegistry: CircuitBreakerRegistry;
+  private messageHandlers: Map<string, Function[]> = new Map();
+  private metrics: {
+    messagesSent: number;
+    messagesReceived: number;
+    errors: number;
+    startTime: Date;
+  } = {
+    messagesSent: 0,
+    messagesReceived: 0,
+    errors: 0,
+    startTime: new Date()
+  };
 
-  constructor(baseBus: AgentCommunicationBus, circuitBreakerRegistry: any) {
+  constructor(
+    baseBus: AgentCommunicationBus,
+    circuitBreakerRegistry: CircuitBreakerRegistry
+  ) {
     this.baseBus = baseBus;
     this.circuitBreakerRegistry = circuitBreakerRegistry;
-    
-    // Register handler for all messages to provide circuit breaker protection
-    this.baseBus.on('message', (message: AgentMessage) => this.handleMessage(message));
-    
-    console.log('Enhanced communication bus initialized');
-  }
 
-  /**
-   * Send a message with enhanced delivery options
-   */
-  public async sendMessage(
-    message: AgentMessage,
-    options: DeliveryOptions = {}
-  ): Promise<DeliveryResult> {
-    const startTime = Date.now();
-    const destination = message.destination;
-    const messageId = message.id;
-    
-    const result: DeliveryResult = {
-      success: false,
-      messageId,
-      destination,
-      sentAt: new Date(),
-      retryCount: 0
-    };
-    
-    try {
-      // Check if circuit breaker exists and is open
-      if (this.circuitBreakerRegistry.hasBreaker(destination)) {
-        const breaker = this.circuitBreakerRegistry.getBreaker(destination);
-        
-        // Use circuit breaker to protect the send operation
-        await breaker.execute(async () => {
-          // Apply timeout if specified
-          if (options.timeout) {
-            await this.sendWithTimeout(message, options.timeout);
-          } else {
-            await this.baseBus.sendMessage(message);
-          }
-        });
-      } else {
-        // No circuit breaker, just send directly
-        if (options.timeout) {
-          await this.sendWithTimeout(message, options.timeout);
-        } else {
-          await this.baseBus.sendMessage(message);
-        }
-      }
-      
-      result.success = true;
-      result.deliveredAt = new Date();
-      return result;
-    } catch (error) {
-      // Handle retry logic if configured
-      if (options.retries && options.retries > 0 && result.retryCount! < options.retries) {
-        result.retryCount!++;
-        
-        console.log(`Retrying message ${messageId} to ${destination} (${result.retryCount}/${options.retries})`);
-        
-        // Delay before retry if specified
-        if (options.retryDelay) {
-          await new Promise(resolve => setTimeout(resolve, options.retryDelay));
-        }
-        
-        // Recursive retry
-        return this.sendMessage(message, {
-          ...options,
-          retries: options.retries - 1,
-          retryCount: result.retryCount
-        });
-      }
-      
-      // No more retries or not configured for retry
-      result.success = false;
-      result.error = (error as Error).message;
-      return result;
-    }
-  }
-
-  /**
-   * Send a message and wait for a response
-   */
-  public async sendMessageWithResponse(
-    message: AgentMessage,
-    options: DeliveryOptions = {}
-  ): Promise<AgentMessage> {
-    // Set default timeout if not specified
-    const timeout = options.timeout || 30000; // 30 seconds default
-    
-    // Create a promise that will be resolved when we receive a response
-    const responsePromise = new Promise<AgentMessage>((resolve, reject) => {
-      // Set a timeout to reject the promise if no response is received
-      const timer = setTimeout(() => {
-        if (this.pendingResponses.has(message.id)) {
-          this.pendingResponses.delete(message.id);
-          reject(new Error(`Timeout waiting for response to message ${message.id}`));
-        }
-      }, timeout);
-      
-      // Store the promise resolvers and timeout
-      this.pendingResponses.set(message.id, {
-        resolve,
-        reject,
-        timer
-      });
+    // Set up listener for all messages on the base bus
+    this.baseBus.on('message', (message: AgentMessage) => {
+      this.handleIncomingMessage(message);
     });
-    
-    // Send the message
-    await this.sendMessage(message, options);
-    
-    // Wait for the response
-    return responsePromise;
+
+    log('Enhanced communication bus initialized', 'enhanced-bus');
   }
 
   /**
-   * Register a message handler for a specific event type
+   * Send a message with circuit breaker protection
    */
-  public registerHandler(
-    eventType: MessageEventType | string,
-    handler: (message: AgentMessage) => Promise<void> | void
-  ): void {
-    if (!this.messageHandlers.has(eventType)) {
-      this.messageHandlers.set(eventType, []);
+  public async sendMessage(message: AgentMessage): Promise<MessageSendResult> {
+    // Get destination agent ID or service
+    const destination = message.destination;
+
+    // Check if circuit breaker exists and is open for this destination
+    const breaker = this.circuitBreakerRegistry.getBreaker(destination);
+    if (breaker.isOpen()) {
+      log(`Circuit open for ${destination}, message rejected`, 'enhanced-bus');
+      return {
+        success: false,
+        messageId: message.messageId,
+        error: `Circuit breaker for ${destination} is open`,
+        circuitOpen: true
+      };
     }
-    
-    this.messageHandlers.get(eventType)!.push(handler);
-    console.log(`Registered handler for event type: ${eventType}`);
+
+    try {
+      // Execute sendMessage through the circuit breaker
+      await breaker.execute(async () => {
+        await this.baseBus.sendMessage(message);
+      });
+
+      // Update metrics
+      this.metrics.messagesSent++;
+
+      return {
+        success: true,
+        messageId: message.messageId
+      };
+    } catch (error) {
+      // Update metrics
+      this.metrics.errors++;
+
+      // Log the error
+      log(`Error sending message to ${destination}: ${error}`, 'enhanced-bus');
+
+      // If the circuit is now open due to this error, broadcast a notification
+      if (breaker.isOpen()) {
+        log(`Circuit opened for ${destination} due to failures`, 'enhanced-bus');
+        
+        // Get stats for this breaker
+        const stats = this.circuitBreakerRegistry.getStats(destination);
+        
+        // Broadcast circuit breaker status message
+        this.broadcastCircuitBreakerStatus(
+          destination,
+          'OPEN',
+          stats.failures,
+          `Circuit opened after ${stats.failures} consecutive failures`
+        );
+      }
+
+      return {
+        success: false,
+        messageId: message.messageId,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
   }
 
   /**
-   * Broadcast a message to all agents or a specific group
+   * Broadcast a message to all agents
    */
-  public async broadcast(
-    message: AgentMessage,
-    filter?: (agentId: string) => boolean
-  ): Promise<DeliveryResult[]> {
-    // Implementation would depend on how the base bus handles broadcasts
-    // This is a simplified version
-    return this.baseBus.broadcast(message);
+  public async broadcast(message: AgentMessage): Promise<MessageSendResult[]> {
+    try {
+      await this.baseBus.broadcast(message);
+      this.metrics.messagesSent++;
+      
+      return [{ success: true, messageId: message.messageId }];
+    } catch (error) {
+      this.metrics.errors++;
+      
+      log(`Error broadcasting message: ${error}`, 'enhanced-bus');
+      
+      return [{
+        success: false,
+        messageId: message.messageId,
+        error: error instanceof Error ? error.message : String(error)
+      }];
+    }
   }
 
   /**
-   * Get the health status of all connected agents
+   * Register a message handler with the bus
    */
-  public async getAgentsHealth(): Promise<Record<string, any>> {
-    // Implementation would depend on how agent health is tracked
-    return {}; // Placeholder
+  public on(event: string, handler: Function): void {
+    if (!this.messageHandlers.has(event)) {
+      this.messageHandlers.set(event, []);
+    }
+
+    this.messageHandlers.get(event)!.push(handler);
   }
 
   /**
-   * Get the circuit breaker status for all agents
+   * Remove a message handler
    */
-  public async getCircuitBreakersStatus(): Promise<Record<string, any>> {
-    return this.circuitBreakerRegistry.getAllStats();
+  public off(event: string, handler: Function): void {
+    if (this.messageHandlers.has(event)) {
+      const handlers = this.messageHandlers.get(event)!;
+      const index = handlers.indexOf(handler);
+      if (index !== -1) {
+        handlers.splice(index, 1);
+      }
+    }
   }
 
   /**
-   * Reset a circuit breaker for a specific agent
+   * Send a health check to a specific agent
    */
-  public async resetCircuitBreaker(agentId: string): Promise<boolean> {
-    return this.circuitBreakerRegistry.resetBreaker(agentId);
+  public async sendHealthCheck(
+    sourceAgentId: string,
+    targetAgentId: string,
+    requestMetrics: boolean = false
+  ): Promise<MessageSendResult> {
+    const message = createHealthCheckMessage(
+      sourceAgentId,
+      targetAgentId,
+      'basic',
+      requestMetrics
+    );
+
+    return this.sendMessage(message);
   }
 
   /**
-   * Disconnect from the communication bus
+   * Get bus metrics
+   */
+  public getMetrics(): any {
+    return {
+      ...this.metrics,
+      uptime: Math.round((new Date().getTime() - this.metrics.startTime.getTime()) / 1000)
+    };
+  }
+
+  /**
+   * Reset circuit breaker for a specific destination
+   */
+  public resetCircuitBreaker(destination: string): boolean {
+    return this.circuitBreakerRegistry.resetBreaker(destination);
+  }
+
+  /**
+   * Disconnect and clean up
    */
   public async disconnect(): Promise<void> {
-    // Clean up pending responses
-    for (const [id, { timer, reject }] of this.pendingResponses.entries()) {
-      clearTimeout(timer);
-      reject(new Error('Communication bus disconnected'));
-      this.pendingResponses.delete(id);
-    }
+    // Remove our listener from the base bus
+    // (if the base bus supports removing listeners)
     
-    // Disconnect from base bus
+    // Disconnect the base bus
     await this.baseBus.disconnect();
     
-    console.log('Enhanced communication bus disconnected');
+    // Clear all local handlers
+    this.messageHandlers.clear();
+    
+    log('Enhanced communication bus disconnected', 'enhanced-bus');
   }
 
   /**
-   * Handle an incoming message
+   * Handle incoming messages from the base bus
    */
-  private async handleMessage(message: AgentMessage): Promise<void> {
-    // Check if this is a response to a pending request
-    if (message.correlationId && this.pendingResponses.has(message.correlationId)) {
-      const { resolve, timer } = this.pendingResponses.get(message.correlationId)!;
-      clearTimeout(timer);
-      resolve(message);
-      this.pendingResponses.delete(message.correlationId);
-      return;
+  private handleIncomingMessage(message: AgentMessage): void {
+    // Update metrics
+    this.metrics.messagesReceived++;
+
+    // Handle enhanced message types
+    if (message.eventType === EnhancedMessageEventType.CIRCUIT_BREAKER_OPEN ||
+        message.eventType === EnhancedMessageEventType.CIRCUIT_BREAKER_HALF_OPEN ||
+        message.eventType === EnhancedMessageEventType.CIRCUIT_BREAKER_CLOSED) {
+      this.handleCircuitBreakerStatusMessage(message);
     }
+
+    // Emit event to all registered handlers
+    this.emit('message', message);
+
+    // Also emit specific event for the message type
+    this.emit(message.eventType, message);
+  }
+
+  /**
+   * Handle a circuit breaker status change message
+   */
+  private handleCircuitBreakerStatusMessage(message: AgentMessage): void {
+    const { state, target } = message.payload;
     
-    // Otherwise, pass to registered handlers
-    if (this.messageHandlers.has(message.eventType)) {
-      const handlers = this.messageHandlers.get(message.eventType)!;
-      
-      // Execute all handlers for this event type
-      for (const handler of handlers) {
+    log(`Received circuit breaker status message: ${state} for ${target}`, 'enhanced-bus');
+    
+    // No action needed here, just logging for now
+    // In a more sophisticated implementation, we might update our local view of circuit states
+  }
+
+  /**
+   * Emit an event to all registered handlers
+   */
+  private emit(event: string, ...args: any[]): void {
+    if (this.messageHandlers.has(event)) {
+      for (const handler of this.messageHandlers.get(event)!) {
         try {
-          await handler(message);
+          handler(...args);
         } catch (error) {
-          console.error(`Error in message handler for ${message.eventType}:`, error);
+          log(`Error in handler for event ${event}: ${error}`, 'enhanced-bus');
+          this.metrics.errors++;
         }
       }
     }
   }
 
   /**
-   * Send a message with a timeout
+   * Broadcast a circuit breaker status change
    */
-  private async sendWithTimeout(message: AgentMessage, timeoutMs: number): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error(`Timeout sending message to ${message.destination}`));
-      }, timeoutMs);
-      
-      this.baseBus.sendMessage(message)
-        .then(() => {
-          clearTimeout(timer);
-          resolve();
-        })
-        .catch(error => {
-          clearTimeout(timer);
-          reject(error);
-        });
-    });
+  private async broadcastCircuitBreakerStatus(
+    target: string,
+    state: 'OPEN' | 'HALF_OPEN' | 'CLOSED',
+    failures: number,
+    details?: string
+  ): Promise<void> {
+    const message = createCircuitBreakerStatusMessage(
+      'system:enhanced-bus',
+      state,
+      target,
+      failures,
+      details
+    );
+
+    try {
+      await this.baseBus.broadcast(message);
+    } catch (error) {
+      log(`Error broadcasting circuit breaker status: ${error}`, 'enhanced-bus');
+    }
   }
 }

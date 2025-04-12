@@ -1,105 +1,166 @@
 /**
  * Circuit Breaker Registry
  * 
- * Provides a centralized registry for circuit breakers to manage
- * individual services/endpoints with a single point of configuration.
+ * Manages a collection of circuit breakers for different services or agents.
  */
 
-import { CircuitBreaker, CircuitBreakerOptions } from './circuit-breaker';
+import { CircuitBreaker, CircuitBreakerOptions, CircuitState, CircuitBreakerStats } from './circuit-breaker';
+import { log } from '../vite';
 
+/**
+ * Circuit breaker registry
+ */
 export class CircuitBreakerRegistry {
   private breakers: Map<string, CircuitBreaker> = new Map();
   private defaultOptions: CircuitBreakerOptions;
-
-  constructor(defaultOptions?: Partial<CircuitBreakerOptions>) {
-    // Default configuration for all circuit breakers
-    this.defaultOptions = {
-      failureThreshold: 3,
-      resetTimeout: 30000,
-      halfOpenSuccessThreshold: 2,
-      monitorInterval: 60000,
-      timeout: 10000,
-      ...defaultOptions
-    };
-
-    console.log('Circuit breaker registry initialized with default options:', this.defaultOptions);
+  
+  constructor(defaultOptions: CircuitBreakerOptions) {
+    this.defaultOptions = defaultOptions;
+    log('Circuit breaker registry initialized', 'circuit-registry');
   }
-
+  
   /**
-   * Get or create a circuit breaker for a specific service/endpoint
+   * Get a circuit breaker for a service
+   * Creates a new one if it doesn't exist
    */
-  public getBreaker(serviceKey: string, customOptions?: Partial<CircuitBreakerOptions>): CircuitBreaker {
-    if (!this.breakers.has(serviceKey)) {
-      // Create a new circuit breaker with custom or default options
-      const options = {
-        ...this.defaultOptions,
-        ...customOptions
-      };
-      
-      const breaker = new CircuitBreaker(options);
-      this.breakers.set(serviceKey, breaker);
-      
-      console.log(`Created new circuit breaker for service: ${serviceKey}`);
+  public getBreaker(service: string): CircuitBreaker {
+    if (!this.breakers.has(service)) {
+      log(`Creating new circuit breaker for ${service}`, 'circuit-registry');
+      const breaker = new CircuitBreaker(this.defaultOptions, service);
+      this.breakers.set(service, breaker);
+      return breaker;
     }
     
-    return this.breakers.get(serviceKey)!;
+    return this.breakers.get(service)!;
   }
-
+  
   /**
-   * Check if a circuit breaker exists for a specific service
+   * Check if a breaker exists for a service
    */
-  public hasBreaker(serviceKey: string): boolean {
-    return this.breakers.has(serviceKey);
+  public hasBreaker(service: string): boolean {
+    return this.breakers.has(service);
   }
-
+  
   /**
-   * Reset a specific circuit breaker
+   * Reset the circuit breaker for a service
    */
-  public resetBreaker(serviceKey: string): boolean {
-    const breaker = this.breakers.get(serviceKey);
-    if (breaker) {
+  public resetBreaker(service: string): boolean {
+    if (this.breakers.has(service)) {
+      const breaker = this.breakers.get(service)!;
       breaker.reset();
-      console.log(`Reset circuit breaker for service: ${serviceKey}`);
+      log(`Reset circuit breaker for ${service}`, 'circuit-registry');
       return true;
     }
+    
     return false;
   }
-
+  
   /**
-   * Get statistics for all circuit breakers
+   * Remove a circuit breaker
    */
-  public getAllStats(): Record<string, any> {
-    const stats: Record<string, any> = {};
+  public removeBreaker(service: string): boolean {
+    if (this.breakers.has(service)) {
+      const breaker = this.breakers.get(service)!;
+      breaker.dispose();
+      this.breakers.delete(service);
+      log(`Removed circuit breaker for ${service}`, 'circuit-registry');
+      return true;
+    }
     
-    for (const [key, breaker] of this.breakers.entries()) {
-      stats[key] = breaker.getStats();
+    return false;
+  }
+  
+  /**
+   * Get stats for a specific circuit breaker
+   */
+  public getStats(service: string): CircuitBreakerStats {
+    if (this.breakers.has(service)) {
+      return this.breakers.get(service)!.getStats();
+    }
+    
+    return {
+      state: CircuitState.CLOSED,
+      failures: 0,
+      successes: 0,
+      lastFailureTime: null,
+      lastSuccessTime: null,
+      lastStateChangeTime: Date.now(),
+      openCount: 0
+    };
+  }
+  
+  /**
+   * Get stats for all circuit breakers
+   */
+  public getAllStats(): Record<string, CircuitBreakerStats> {
+    const stats: Record<string, CircuitBreakerStats> = {};
+    
+    for (const [service, breaker] of this.breakers) {
+      stats[service] = breaker.getStats();
     }
     
     return stats;
   }
-
+  
   /**
-   * Remove a circuit breaker from the registry
+   * Get all circuit breakers in a specific state
    */
-  public removeBreaker(serviceKey: string): boolean {
-    const breaker = this.breakers.get(serviceKey);
-    if (breaker) {
-      breaker.dispose();
-      this.breakers.delete(serviceKey);
-      console.log(`Removed circuit breaker for service: ${serviceKey}`);
-      return true;
+  public getBreakersInState(state: CircuitState): string[] {
+    const services: string[] = [];
+    
+    for (const [service, breaker] of this.breakers) {
+      if (breaker.getStats().state === state) {
+        services.push(service);
+      }
     }
-    return false;
+    
+    return services;
   }
-
+  
   /**
-   * Clean up all circuit breakers
+   * Get the count of circuit breakers in each state
+   */
+  public getStateCount(): Record<CircuitState, number> {
+    const counts: Record<CircuitState, number> = {
+      [CircuitState.CLOSED]: 0,
+      [CircuitState.OPEN]: 0,
+      [CircuitState.HALF_OPEN]: 0
+    };
+    
+    for (const breaker of this.breakers.values()) {
+      counts[breaker.getStats().state]++;
+    }
+    
+    return counts;
+  }
+  
+  /**
+   * Get the number of circuit breakers
+   */
+  public getBreakerCount(): number {
+    return this.breakers.size;
+  }
+  
+  /**
+   * Close all circuit breakers
+   */
+  public resetAll(): void {
+    for (const breaker of this.breakers.values()) {
+      breaker.reset();
+    }
+    
+    log('Reset all circuit breakers', 'circuit-registry');
+  }
+  
+  /**
+   * Dispose all circuit breakers
    */
   public dispose(): void {
-    for (const [key, breaker] of this.breakers.entries()) {
+    for (const breaker of this.breakers.values()) {
       breaker.dispose();
-      console.log(`Disposed circuit breaker for service: ${key}`);
     }
+    
     this.breakers.clear();
+    log('Disposed all circuit breakers', 'circuit-registry');
   }
 }

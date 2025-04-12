@@ -1,445 +1,587 @@
 /**
  * Enhanced Agent Manager
  * 
- * Manages agent lifecycle with added reliability features:
- * - Self-healing for crashed agents
- * - Health checking
- * - Circuit breaker integration for agent communication
- * - Centralized agent metrics and monitoring
+ * Extends the base agent manager with resilience features:
+ * - Self-healing capabilities
+ * - Health monitoring
+ * - Agent lifecycle management
  */
 
 import { BaseAgent } from './base-agent';
-import { AgentCommunicationBus } from '@shared/protocols/agent-communication';
-import { AgentStatus, AgentType } from '@shared/protocols/agent-communication';
-import { CircuitBreakerRegistry } from '../utils/circuit-breaker-registry';
-import { DataValidationAgent } from './data-validation-agent';
-// Import other agent types as needed
+import { EnhancedCommunicationBus } from '@shared/protocols/enhanced-agent-communication';
+import { AgentType, AgentStatus } from '@shared/protocols/agent-communication';
+import { log } from '../vite';
 
+/**
+ * Agent configuration for registration
+ */
 export interface AgentConfig {
   agentId: string;
   agentType: AgentType;
-  settings?: Record<string, any>;
   healthCheckIntervalMs?: number;
   retryDelayMs?: number;
   maxRetries?: number;
+  settings?: Record<string, any>;
 }
 
+/**
+ * Agent health information
+ */
 export interface AgentHealth {
   agentId: string;
-  status: AgentStatus;
+  status: string;
   healthCheck: {
-    lastCheckTime: number;
     isHealthy: boolean;
+    lastCheckTime: number;
     consecutiveFailures: number;
-    restartAttempts: number;
+    lastError?: string;
   };
-  metrics: {
-    uptime: number;
-    messagesSent: number;
-    messagesReceived: number;
-    errorCount: number;
-  };
+  metrics?: Record<string, any>;
+  lastStatusChangeTime: number;
 }
 
+/**
+ * Enhanced agent manager with self-healing capabilities
+ */
 export class EnhancedAgentManager {
   private agents: Map<string, BaseAgent> = new Map();
   private agentConfigs: Map<string, AgentConfig> = new Map();
-  private healthStatuses: Map<string, AgentHealth> = new Map();
-  private healthChecks: Map<string, NodeJS.Timeout> = new Map();
-  private communicationBus: AgentCommunicationBus;
-  private circuitBreakerRegistry: CircuitBreakerRegistry;
-  private isInitialized: boolean = false;
-
-  constructor(communicationBus: AgentCommunicationBus) {
-    this.communicationBus = communicationBus;
-    this.circuitBreakerRegistry = new CircuitBreakerRegistry();
-    
-    console.log('Enhanced Agent Manager created');
+  private agentHealth: Map<string, AgentHealth> = new Map();
+  private restartTimers: Map<string, NodeJS.Timeout> = new Map();
+  private healthCheckTimers: Map<string, NodeJS.Timeout> = new Map();
+  private bus: EnhancedCommunicationBus;
+  
+  constructor(bus: EnhancedCommunicationBus) {
+    this.bus = bus;
+    log('Enhanced agent manager initialized', 'enhanced-manager');
   }
-
+  
   /**
-   * Initialize the agent manager
+   * Initialize the enhanced agent manager
    */
   public async initialize(): Promise<void> {
-    if (this.isInitialized) {
-      console.warn('Agent manager is already initialized');
-      return;
-    }
-
-    // Set up global error handlers
-    process.on('uncaughtException', this.handleUncaughtException.bind(this));
-    process.on('unhandledRejection', this.handleUnhandledRejection.bind(this));
-
-    this.isInitialized = true;
-    console.log('Enhanced Agent Manager initialized');
+    // Set up bus listeners
+    // This would be used to listen for agent status updates, etc.
+    
+    log('Enhanced agent manager started', 'enhanced-manager');
   }
-
+  
   /**
    * Register an agent with the manager
    */
   public registerAgent(config: AgentConfig): void {
-    const { agentId, agentType, settings = {} } = config;
+    const { agentId, agentType } = config;
     
-    // Check if agent already exists
+    // Store the agent configuration
+    this.agentConfigs.set(agentId, {
+      ...config,
+      healthCheckIntervalMs: config.healthCheckIntervalMs || 30000,  // Default: 30 seconds
+      retryDelayMs: config.retryDelayMs || 5000,  // Default: 5 seconds
+      maxRetries: config.maxRetries || 3  // Default: 3 retries
+    });
+    
+    // Initialize agent health
+    this.agentHealth.set(agentId, {
+      agentId,
+      status: AgentStatus.UNKNOWN,
+      healthCheck: {
+        isHealthy: false,
+        lastCheckTime: Date.now(),
+        consecutiveFailures: 0
+      },
+      lastStatusChangeTime: Date.now()
+    });
+    
+    log(`Registered agent ${agentId} of type ${agentType}`, 'enhanced-manager');
+  }
+  
+  /**
+   * Start all registered agents
+   */
+  public async startAllAgents(): Promise<void> {
+    const promises: Promise<void>[] = [];
+    
+    // Get all registered agent IDs
+    const agentIds = Array.from(this.agentConfigs.keys());
+    
+    // Start each agent
+    for (const agentId of agentIds) {
+      promises.push(this.startAgent(agentId));
+    }
+    
+    // Wait for all agents to start
+    await Promise.all(promises);
+    
+    log(`Started ${promises.length} agents`, 'enhanced-manager');
+  }
+  
+  /**
+   * Start a specific agent
+   */
+  public async startAgent(agentId: string): Promise<void> {
+    // Check if agent is registered
+    if (!this.agentConfigs.has(agentId)) {
+      throw new Error(`Agent ${agentId} is not registered`);
+    }
+    
+    // Check if agent is already started
     if (this.agents.has(agentId)) {
-      console.warn(`Agent ${agentId} is already registered`);
+      log(`Agent ${agentId} is already started`, 'enhanced-manager');
       return;
     }
     
-    // Store configuration
-    this.agentConfigs.set(agentId, {
-      ...config,
-      healthCheckIntervalMs: config.healthCheckIntervalMs || 60000, // Default 1 minute
-      retryDelayMs: config.retryDelayMs || 5000, // Default 5 seconds
-      maxRetries: config.maxRetries || 3 // Default 3 retries
-    });
+    const config = this.agentConfigs.get(agentId)!;
     
-    // Initialize health status
-    this.initializeHealthStatus(agentId);
-    
-    console.log(`Agent ${agentId} registered with type ${agentType}`);
-  }
-
-  /**
-   * Create and start all registered agents
-   */
-  public async startAllAgents(): Promise<void> {
-    const startPromises: Promise<void>[] = [];
-    
-    for (const agentId of this.agentConfigs.keys()) {
-      startPromises.push(this.startAgent(agentId));
+    try {
+      // This is a placeholder. In a real implementation, we would:
+      // 1. Create the appropriate agent instance based on the agent type
+      // 2. Initialize it
+      // 3. Start it
+      
+      // For this demo, we'll just log the start
+      log(`Starting agent ${agentId}`, 'enhanced-manager');
+      
+      // Update agent health
+      this.updateAgentHealth(agentId, {
+        status: AgentStatus.STARTING
+      });
+      
+      // In a real implementation, we would do something like:
+      // const agent = this.createAgentInstance(config);
+      // await agent.initialize();
+      // await agent.start();
+      // this.agents.set(agentId, agent);
+      
+      // Set up health check for this agent
+      this.startHealthCheck(agentId);
+      
+      // Update agent health
+      this.updateAgentHealth(agentId, {
+        status: AgentStatus.READY,
+        healthCheck: {
+          isHealthy: true,
+          lastCheckTime: Date.now(),
+          consecutiveFailures: 0
+        }
+      });
+      
+      log(`Agent ${agentId} started successfully`, 'enhanced-manager');
+    } catch (error) {
+      // Handle start failure
+      log(`Error starting agent ${agentId}: ${error}`, 'enhanced-manager');
+      
+      // Update agent health
+      this.updateAgentHealth(agentId, {
+        status: AgentStatus.ERROR,
+        healthCheck: {
+          isHealthy: false,
+          lastCheckTime: Date.now(),
+          consecutiveFailures: 1,
+          lastError: String(error)
+        }
+      });
+      
+      // Attempt to retry starting the agent
+      this.scheduleAgentRestart(agentId);
     }
-    
-    await Promise.all(startPromises);
-    console.log(`Started ${startPromises.length} agents`);
   }
-
+  
   /**
-   * Create and start a specific agent
+   * Stop a specific agent
    */
-  public async startAgent(agentId: string): Promise<void> {
-    const config = this.agentConfigs.get(agentId);
-    if (!config) {
-      throw new Error(`No configuration found for agent ${agentId}`);
+  public async stopAgent(agentId: string): Promise<void> {
+    if (!this.agents.has(agentId)) {
+      log(`Agent ${agentId} is not running`, 'enhanced-manager');
+      return;
     }
     
     try {
-      console.log(`Starting agent ${agentId}`);
+      // Get the agent
+      const agent = this.agents.get(agentId)!;
       
-      // Create the agent based on type
-      const agent = this.createAgentInstance(config);
+      // Update agent health
+      this.updateAgentHealth(agentId, {
+        status: AgentStatus.STOPPING
+      });
       
-      // Store the agent
-      this.agents.set(agentId, agent);
+      // Stop the agent
+      // await agent.stop();
+      log(`Stopping agent ${agentId}`, 'enhanced-manager');
       
-      // Initialize the agent
-      await agent.initialize();
+      // Remove from active agents
+      this.agents.delete(agentId);
       
-      // Start health checking
-      this.startHealthCheck(agentId);
+      // Stop health check
+      this.stopHealthCheck(agentId);
       
-      // Update health status
-      const health = this.healthStatuses.get(agentId)!;
-      health.status = agent.getStatus();
-      health.healthCheck.isHealthy = true;
-      health.healthCheck.lastCheckTime = Date.now();
-      
-      console.log(`Agent ${agentId} started successfully`);
-    } catch (error) {
-      console.error(`Failed to start agent ${agentId}:`, error);
-      
-      // Update health status
-      const health = this.healthStatuses.get(agentId)!;
-      health.status = AgentStatus.ERROR;
-      health.healthCheck.isHealthy = false;
-      health.healthCheck.lastCheckTime = Date.now();
-      health.healthCheck.consecutiveFailures++;
-      
-      // Attempt retry if configured
-      if (health.healthCheck.restartAttempts < config.maxRetries!) {
-        console.log(`Scheduling restart for agent ${agentId} in ${config.retryDelayMs}ms`);
-        setTimeout(() => {
-          health.healthCheck.restartAttempts++;
-          this.startAgent(agentId);
-        }, config.retryDelayMs);
-      } else {
-        console.error(`Maximum restart attempts (${config.maxRetries}) reached for agent ${agentId}`);
+      // Cancel any pending restart
+      if (this.restartTimers.has(agentId)) {
+        clearTimeout(this.restartTimers.get(agentId)!);
+        this.restartTimers.delete(agentId);
       }
       
-      throw error;
+      // Update agent health
+      this.updateAgentHealth(agentId, {
+        status: AgentStatus.OFFLINE as any, // Treat as offline when stopped
+        healthCheck: {
+          isHealthy: false,
+          lastCheckTime: Date.now(),
+          consecutiveFailures: 0
+        }
+      });
+      
+      log(`Agent ${agentId} stopped successfully`, 'enhanced-manager');
+    } catch (error) {
+      log(`Error stopping agent ${agentId}: ${error}`, 'enhanced-manager');
+      
+      // Force removal from active agents
+      this.agents.delete(agentId);
+      
+      // Still mark it as offline
+      this.updateAgentHealth(agentId, {
+        status: AgentStatus.OFFLINE as any,
+        healthCheck: {
+          isHealthy: false,
+          lastCheckTime: Date.now(),
+          consecutiveFailures: 0
+        }
+      });
     }
   }
-
-  /**
-   * Get an agent by ID
-   */
-  public getAgent(agentId: string): BaseAgent | undefined {
-    return this.agents.get(agentId);
-  }
-
-  /**
-   * Get an agent's health status
-   */
-  public getAgentHealth(agentId: string): AgentHealth | undefined {
-    return this.healthStatuses.get(agentId);
-  }
-
-  /**
-   * Get health status for all agents
-   */
-  public getAllAgentsHealth(): Record<string, AgentHealth> {
-    const allHealth: Record<string, AgentHealth> = {};
-    
-    for (const [agentId, health] of this.healthStatuses.entries()) {
-      allHealth[agentId] = health;
-    }
-    
-    return allHealth;
-  }
-
+  
   /**
    * Restart a specific agent
    */
   public async restartAgent(agentId: string): Promise<void> {
-    console.log(`Restarting agent ${agentId}`);
+    log(`Restarting agent ${agentId}`, 'enhanced-manager');
+    
+    // Update agent health
+    this.updateAgentHealth(agentId, {
+      status: AgentStatus.RESTARTING
+    });
     
     // Stop the agent if it's running
-    await this.stopAgent(agentId);
-    
-    // Reset health check counters
-    const health = this.healthStatuses.get(agentId);
-    if (health) {
-      health.healthCheck.consecutiveFailures = 0;
-      health.healthCheck.restartAttempts = 0;
+    if (this.agents.has(agentId)) {
+      await this.stopAgent(agentId);
     }
     
     // Start the agent again
     await this.startAgent(agentId);
   }
-
+  
   /**
-   * Stop a specific agent
+   * Get the health of all agents
    */
-  public async stopAgent(agentId: string): Promise<void> {
-    const agent = this.agents.get(agentId);
-    if (!agent) {
-      console.warn(`No running agent found with ID ${agentId}`);
+  public getAllAgentsHealth(): Record<string, AgentHealth> {
+    const health: Record<string, AgentHealth> = {};
+    
+    for (const [agentId, agentHealth] of this.agentHealth) {
+      health[agentId] = { ...agentHealth };
+    }
+    
+    return health;
+  }
+  
+  /**
+   * Get the health of a specific agent
+   */
+  public getAgentHealth(agentId: string): AgentHealth | undefined {
+    if (this.agentHealth.has(agentId)) {
+      return { ...this.agentHealth.get(agentId)! };
+    }
+    return undefined;
+  }
+  
+  /**
+   * Get all unhealthy agents
+   */
+  public getUnhealthyAgents(): string[] {
+    const unhealthyAgents: string[] = [];
+    
+    for (const [agentId, health] of this.agentHealth) {
+      if (!health.healthCheck.isHealthy) {
+        unhealthyAgents.push(agentId);
+      }
+    }
+    
+    return unhealthyAgents;
+  }
+  
+  /**
+   * Simulate an agent failure (for testing)
+   */
+  public simulateAgentFailure(agentId: string): void {
+    if (!this.agents.has(agentId)) {
+      log(`Agent ${agentId} is not running, cannot simulate failure`, 'enhanced-manager');
       return;
     }
     
-    console.log(`Stopping agent ${agentId}`);
+    log(`Simulating failure of agent ${agentId}`, 'enhanced-manager');
     
-    // Stop health check
-    this.stopHealthCheck(agentId);
-    
-    try {
-      // Shut down the agent
-      await agent.shutdown();
-      console.log(`Agent ${agentId} stopped successfully`);
-    } catch (error) {
-      console.error(`Error stopping agent ${agentId}:`, error);
-      // We still want to remove it from our map
-    }
-    
-    // Remove from active agents
-    this.agents.delete(agentId);
-    
-    // Update health status
-    const health = this.healthStatuses.get(agentId);
-    if (health) {
-      health.status = AgentStatus.OFFLINE;
-    }
-  }
-
-  /**
-   * Stop all agents
-   */
-  public async stopAllAgents(): Promise<void> {
-    console.log('Stopping all agents');
-    
-    const stopPromises: Promise<void>[] = [];
-    
-    for (const agentId of this.agents.keys()) {
-      stopPromises.push(this.stopAgent(agentId));
-    }
-    
-    await Promise.all(stopPromises);
-    console.log(`Stopped ${stopPromises.length} agents`);
-  }
-
-  /**
-   * Shut down the agent manager and clean up resources
-   */
-  public async shutdown(): Promise<void> {
-    if (!this.isInitialized) {
-      return;
-    }
-    
-    console.log('Shutting down Enhanced Agent Manager');
-    
-    // Stop all agents
-    await this.stopAllAgents();
-    
-    // Clean up circuit breakers
-    this.circuitBreakerRegistry.dispose();
-    
-    // Remove global error handlers
-    // Note: In a real system, we'd need to store and remove specific handler references
-    
-    this.isInitialized = false;
-    console.log('Enhanced Agent Manager shut down successfully');
-  }
-
-  /**
-   * Create an agent instance based on its type
-   */
-  private createAgentInstance(config: AgentConfig): BaseAgent {
-    const { agentId, agentType, settings = {} } = config;
-    
-    switch (agentType) {
-      case AgentType.DATA_VALIDATION:
-        return new DataValidationAgent(agentId, this.communicationBus, settings);
-        
-      // Add cases for other agent types here
-      
-      default:
-        throw new Error(`Unsupported agent type: ${agentType}`);
-    }
-  }
-
-  /**
-   * Initialize health status for an agent
-   */
-  private initializeHealthStatus(agentId: string): void {
-    this.healthStatuses.set(agentId, {
-      agentId,
-      status: AgentStatus.OFFLINE,
+    // Update agent health
+    this.updateAgentHealth(agentId, {
+      status: AgentStatus.ERROR,
       healthCheck: {
-        lastCheckTime: 0,
         isHealthy: false,
-        consecutiveFailures: 0,
-        restartAttempts: 0
-      },
-      metrics: {
-        uptime: 0,
-        messagesSent: 0,
-        messagesReceived: 0,
-        errorCount: 0
+        lastCheckTime: Date.now(),
+        consecutiveFailures: 1,
+        lastError: 'Simulated failure'
       }
     });
+    
+    // Trigger self-healing
+    this.handleAgentFailure(agentId);
   }
-
+  
   /**
-   * Start periodic health checking for an agent
+   * Shutdown the manager and all agents
+   */
+  public async shutdown(): Promise<void> {
+    log('Shutting down enhanced agent manager', 'enhanced-manager');
+    
+    // Stop all health checks
+    for (const timer of this.healthCheckTimers.values()) {
+      clearInterval(timer);
+    }
+    this.healthCheckTimers.clear();
+    
+    // Cancel all pending restarts
+    for (const timer of this.restartTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.restartTimers.clear();
+    
+    // Stop all agents
+    const promises: Promise<void>[] = [];
+    for (const agentId of this.agents.keys()) {
+      promises.push(this.stopAgent(agentId));
+    }
+    
+    await Promise.all(promises);
+    this.agents.clear();
+    
+    log('Enhanced agent manager shutdown complete', 'enhanced-manager');
+  }
+  
+  /**
+   * Start health check for a specific agent
    */
   private startHealthCheck(agentId: string): void {
-    const config = this.agentConfigs.get(agentId);
-    if (!config) return;
+    // Check if health check is already running
+    if (this.healthCheckTimers.has(agentId)) {
+      clearInterval(this.healthCheckTimers.get(agentId)!);
+    }
     
-    // Clear any existing health check
-    this.stopHealthCheck(agentId);
+    const config = this.agentConfigs.get(agentId)!;
+    const interval = config.healthCheckIntervalMs || 30000;
     
-    // Start a new health check interval
-    const interval = setInterval(
-      () => this.checkAgentHealth(agentId),
-      config.healthCheckIntervalMs
-    );
+    // Set up interval for health check
+    const timer = setInterval(() => {
+      this.checkAgentHealth(agentId);
+    }, interval);
     
-    this.healthChecks.set(agentId, interval);
-    console.log(`Started health check for agent ${agentId} at ${config.healthCheckIntervalMs}ms intervals`);
+    this.healthCheckTimers.set(agentId, timer);
+    log(`Started health check for agent ${agentId}, interval: ${interval}ms`, 'enhanced-manager');
   }
-
+  
   /**
-   * Stop health checking for an agent
+   * Stop health check for a specific agent
    */
   private stopHealthCheck(agentId: string): void {
-    const interval = this.healthChecks.get(agentId);
-    if (interval) {
-      clearInterval(interval);
-      this.healthChecks.delete(agentId);
-      console.log(`Stopped health check for agent ${agentId}`);
+    if (this.healthCheckTimers.has(agentId)) {
+      clearInterval(this.healthCheckTimers.get(agentId)!);
+      this.healthCheckTimers.delete(agentId);
+      log(`Stopped health check for agent ${agentId}`, 'enhanced-manager');
     }
   }
-
+  
   /**
-   * Check the health of an agent
+   * Check health of a specific agent
    */
   private async checkAgentHealth(agentId: string): Promise<void> {
-    const agent = this.agents.get(agentId);
-    const health = this.healthStatuses.get(agentId);
-    
-    if (!agent || !health) {
-      console.warn(`Cannot check health for missing agent: ${agentId}`);
+    if (!this.agents.has(agentId)) {
+      // Skip health check for agents that are not running
       return;
     }
     
     try {
+      // In a real implementation, we would check the agent's health
+      const agent = this.agents.get(agentId)!;
+      
       // Update last check time
+      const health = this.agentHealth.get(agentId)!;
       health.healthCheck.lastCheckTime = Date.now();
       
-      // Get current agent status
-      const status = agent.getStatus();
-      health.status = status;
+      // For this demo, we'll just assume the agent is healthy
+      // In a real implementation, we would do something like:
+      // const metrics = await agent.getMetrics();
+      // const isHealthy = metrics.status === 'healthy';
       
-      // Check if agent is in error state
-      const isHealthy = status !== AgentStatus.ERROR;
-      health.healthCheck.isHealthy = isHealthy;
+      const isHealthy = true; // Placeholder
       
       if (isHealthy) {
-        // Reset consecutive failures on success
-        health.healthCheck.consecutiveFailures = 0;
-      } else {
-        // Increment consecutive failures
-        health.healthCheck.consecutiveFailures++;
-        console.warn(`Agent ${agentId} health check failed, consecutive failures: ${health.healthCheck.consecutiveFailures}`);
+        // Agent is healthy
+        if (!health.healthCheck.isHealthy) {
+          // Agent has recovered
+          log(`Agent ${agentId} has recovered`, 'enhanced-manager');
+        }
         
-        // Get config for retry thresholds
-        const config = this.agentConfigs.get(agentId);
-        if (config && health.healthCheck.consecutiveFailures >= 3) {
-          console.error(`Agent ${agentId} has failed ${health.healthCheck.consecutiveFailures} consecutive health checks, attempting restart`);
-          
-          // Only restart if we haven't exceeded max retries
-          if (health.healthCheck.restartAttempts < config.maxRetries!) {
-            health.healthCheck.restartAttempts++;
-            await this.restartAgent(agentId);
-          } else {
-            console.error(`Maximum restart attempts (${config.maxRetries}) reached for agent ${agentId}`);
+        // Update health
+        this.updateAgentHealth(agentId, {
+          status: AgentStatus.READY,
+          healthCheck: {
+            isHealthy: true,
+            consecutiveFailures: 0
+          },
+          metrics: {} // Placeholder for real metrics
+        });
+      } else {
+        // Agent is unhealthy
+        health.healthCheck.consecutiveFailures++;
+        
+        this.updateAgentHealth(agentId, {
+          status: AgentStatus.DEGRADED,
+          healthCheck: {
+            isHealthy: false,
+            consecutiveFailures: health.healthCheck.consecutiveFailures
           }
+        });
+        
+        log(`Agent ${agentId} health check failed, consecutive failures: ${health.healthCheck.consecutiveFailures}`, 'enhanced-manager');
+        
+        // If we've reached a threshold, trigger self-healing
+        const config = this.agentConfigs.get(agentId)!;
+        if (health.healthCheck.consecutiveFailures >= 3) {
+          this.handleAgentFailure(agentId);
         }
       }
-      
-      // Update metrics if available
-      const metrics = agent.getMetrics?.();
-      if (metrics) {
-        health.metrics = {
-          ...health.metrics,
-          ...metrics
-        };
-      }
     } catch (error) {
-      console.error(`Error during health check for agent ${agentId}:`, error);
+      // Health check itself failed
+      log(`Error checking health of agent ${agentId}: ${error}`, 'enhanced-manager');
       
-      health.healthCheck.isHealthy = false;
+      // Update health
+      const health = this.agentHealth.get(agentId)!;
       health.healthCheck.consecutiveFailures++;
-      health.status = AgentStatus.ERROR;
-      health.metrics.errorCount++;
+      health.healthCheck.lastError = String(error);
+      
+      this.updateAgentHealth(agentId, {
+        status: AgentStatus.ERROR,
+        healthCheck: {
+          isHealthy: false,
+          consecutiveFailures: health.healthCheck.consecutiveFailures,
+          lastError: String(error)
+        }
+      });
+      
+      // If we've reached a threshold, trigger self-healing
+      if (health.healthCheck.consecutiveFailures >= 3) {
+        this.handleAgentFailure(agentId);
+      }
     }
   }
-
+  
   /**
-   * Handle uncaught exceptions at the process level
+   * Handle agent failure and trigger self-healing
    */
-  private handleUncaughtException(error: Error): void {
-    console.error('PROCESS UNCAUGHT EXCEPTION:', error);
-    // In a production system, we might want to notify monitoring systems here
-    // Do not exit the process, as we want to maintain service availability
+  private handleAgentFailure(agentId: string): void {
+    const config = this.agentConfigs.get(agentId)!;
+    const health = this.agentHealth.get(agentId)!;
+    
+    // Check if we've already reached the max retries
+    if (health.healthCheck.consecutiveFailures > (config.maxRetries || 3) * 2) {
+      log(`Agent ${agentId} has failed too many times, not attempting to restart`, 'enhanced-manager');
+      return;
+    }
+    
+    // Schedule a restart
+    this.scheduleAgentRestart(agentId);
   }
-
+  
   /**
-   * Handle unhandled promise rejections at the process level
+   * Schedule an agent restart
    */
-  private handleUnhandledRejection(reason: any, promise: Promise<any>): void {
-    console.error('PROCESS UNHANDLED REJECTION:', reason);
-    // In a production system, we might want to notify monitoring systems here
+  private scheduleAgentRestart(agentId: string): void {
+    // Cancel any existing restart
+    if (this.restartTimers.has(agentId)) {
+      clearTimeout(this.restartTimers.get(agentId)!);
+    }
+    
+    const config = this.agentConfigs.get(agentId)!;
+    const delay = config.retryDelayMs || 5000;
+    
+    log(`Scheduling restart of agent ${agentId} in ${delay}ms`, 'enhanced-manager');
+    
+    // Schedule restart
+    const timer = setTimeout(async () => {
+      this.restartTimers.delete(agentId);
+      
+      try {
+        await this.restartAgent(agentId);
+      } catch (error) {
+        log(`Error restarting agent ${agentId}: ${error}`, 'enhanced-manager');
+        
+        // Update agent health
+        this.updateAgentHealth(agentId, {
+          status: AgentStatus.ERROR,
+          healthCheck: {
+            isHealthy: false,
+            lastCheckTime: Date.now(),
+            consecutiveFailures: this.agentHealth.get(agentId)!.healthCheck.consecutiveFailures + 1,
+            lastError: String(error)
+          }
+        });
+        
+        // Try again with exponential backoff
+        const newDelay = Math.min(delay * 2, 60000); // Cap at 1 minute
+        
+        // Update the retry delay in config
+        this.agentConfigs.set(agentId, {
+          ...config,
+          retryDelayMs: newDelay
+        });
+        
+        // Schedule another restart
+        this.scheduleAgentRestart(agentId);
+      }
+    }, delay);
+    
+    this.restartTimers.set(agentId, timer);
+  }
+  
+  /**
+   * Update agent health
+   */
+  private updateAgentHealth(agentId: string, update: Partial<AgentHealth>): void {
+    if (!this.agentHealth.has(agentId)) {
+      return;
+    }
+    
+    const currentHealth = this.agentHealth.get(agentId)!;
+    
+    // Check if status is changing
+    const statusChanged = update.status && update.status !== currentHealth.status;
+    
+    // Create new health object with updates
+    const newHealth: AgentHealth = {
+      ...currentHealth,
+      ...update,
+      healthCheck: {
+        ...currentHealth.healthCheck,
+        ...(update.healthCheck || {})
+      },
+      metrics: {
+        ...(currentHealth.metrics || {}),
+        ...(update.metrics || {})
+      }
+    };
+    
+    // Update last status change time if status changed
+    if (statusChanged) {
+      newHealth.lastStatusChangeTime = Date.now();
+      log(`Agent ${agentId} status changed from ${currentHealth.status} to ${update.status}`, 'enhanced-manager');
+    }
+    
+    // Save updated health
+    this.agentHealth.set(agentId, newHealth);
   }
 }

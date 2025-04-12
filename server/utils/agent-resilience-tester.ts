@@ -1,523 +1,432 @@
 /**
  * Agent Resilience Tester
  * 
- * Provides utilities for testing agent resilience and fault tolerance:
- * - Simulated failures
- * - Load testing
- * - Circuit breaker testing
- * - Agent recovery verification
+ * Provides utilities for testing agent resilience capabilities 
+ * including circuit breaker and self-healing features.
  */
 
-import { BaseAgent } from '../agents/base-agent';
-import { AgentMessage, MessageEventType } from '@shared/protocols/message-protocol';
-import { AgentStatus } from '@shared/protocols/agent-communication';
+import { v4 as uuidv4 } from 'uuid';
 import { EnhancedAgentManager } from '../agents/enhanced-agent-manager';
 import { CircuitBreakerRegistry } from './circuit-breaker-registry';
+import { log } from '../vite';
+import { AgentMessage, MessageEventType } from '@shared/protocols/message-protocol';
 
+/**
+ * Types of failures that can be simulated for testing
+ */
 export enum FailureType {
   MESSAGE_TIMEOUT = 'MESSAGE_TIMEOUT',
   MESSAGE_ERROR = 'MESSAGE_ERROR',
   AGENT_CRASH = 'AGENT_CRASH',
-  HIGH_CPU_LOAD = 'HIGH_CPU_LOAD',
   MEMORY_LEAK = 'MEMORY_LEAK',
-  NETWORK_PARTITION = 'NETWORK_PARTITION'
+  HIGH_CPU_USAGE = 'HIGH_CPU_USAGE',
+  RANDOM_FAILURES = 'RANDOM_FAILURES'
 }
 
+/**
+ * Options for running a resilience test
+ */
 export interface TestOptions {
   failureType: FailureType;
   targetAgentId: string;
-  duration?: number;       // Duration in milliseconds
-  failureRate?: number;    // 0.0 to 1.0 (percentage of operations that fail)
-  failureCount?: number;   // Number of failures to inject
-  delayBetweenFailures?: number; // Delay in ms between injected failures
-  loadFactor?: number;     // Multiplier for normal load (1.0 = normal)
+  failureRate?: number;        // 0.0 to 1.0, percentage of operations that will fail
+  failureCount?: number;       // Number of failures to simulate
+  delayBetweenFailures?: number; // Milliseconds between failures
+  durationMs?: number;         // Duration of the test in milliseconds
+  recoveryTimeMs?: number;     // Time to allow for recovery after test
+  specificCommand?: string;    // Specific command to target
 }
 
+/**
+ * Results of a resilience test
+ */
 export interface TestResult {
   testId: string;
-  options: TestOptions;
   startTime: Date;
-  endTime: Date;
-  successCount: number;
-  failureCount: number;
-  recoveryTime?: number;   // Time in ms to recover after test
-  circuitBreakerTripped: boolean;
-  agentRestarted: boolean;
-  metrics: {
-    messageLatencies: number[];  // Array of message latencies in ms
-    cpuUsage?: number[];         // Array of CPU usage measurements
-    memoryUsage?: number[];      // Array of memory usage measurements
+  endTime?: Date;
+  options: TestOptions;
+  status: 'running' | 'completed' | 'failed';
+  stats: {
+    failuresSimulated: number;
+    messagesProcessed: number;
+    circuitBreakerEvents: {
+      opened: number;
+      closed: number;
+      halfOpen: number;
+    };
+    agentEvents: {
+      restarted: number;
+      recovered: number;
+      degraded: number;
+    };
   };
+  logs: string[];
 }
 
 /**
  * Agent Resilience Tester
+ * 
+ * Provides a way to test resilience features by simulating various
+ * types of failures and monitoring the system's response.
  */
 export class AgentResilienceTester {
-  private agentManager: EnhancedAgentManager;
-  private circuitBreakerRegistry: CircuitBreakerRegistry;
-  private activeTests: Map<string, NodeJS.Timeout> = new Map();
   private testResults: Map<string, TestResult> = new Map();
-
+  private activeTests: Map<string, NodeJS.Timeout> = new Map();
+  private agentManager: EnhancedAgentManager;
+  private circuitRegistry: CircuitBreakerRegistry;
+  
   constructor(
     agentManager: EnhancedAgentManager,
-    circuitBreakerRegistry: CircuitBreakerRegistry
+    circuitRegistry: CircuitBreakerRegistry
   ) {
     this.agentManager = agentManager;
-    this.circuitBreakerRegistry = circuitBreakerRegistry;
+    this.circuitRegistry = circuitRegistry;
+    
+    log('Agent Resilience Tester initialized', 'resilience-tester');
   }
-
+  
   /**
-   * Run a resilience test
+   * Run a new resilience test
    */
-  public async runTest(options: TestOptions): Promise<string> {
-    const testId = `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  public runTest(options: TestOptions): string {
+    // Generate a unique test ID
+    const testId = uuidv4();
     
-    // Validate test options
-    this.validateOptions(options);
-    
-    // Initialize test results
-    const testResult: TestResult = {
-      testId,
-      options,
-      startTime: new Date(),
-      endTime: new Date(), // Will be updated when test finishes
-      successCount: 0,
-      failureCount: 0,
-      circuitBreakerTripped: false,
-      agentRestarted: false,
-      metrics: {
-        messageLatencies: []
-      }
+    // Set default options
+    const testOptions: TestOptions = {
+      ...options,
+      failureRate: options.failureRate || 1.0,
+      failureCount: options.failureCount || 10,
+      delayBetweenFailures: options.delayBetweenFailures || 500,
+      durationMs: options.durationMs || 30000,
+      recoveryTimeMs: options.recoveryTimeMs || 10000
     };
     
+    // Create test result object
+    const testResult: TestResult = {
+      testId,
+      startTime: new Date(),
+      options: testOptions,
+      status: 'running',
+      stats: {
+        failuresSimulated: 0,
+        messagesProcessed: 0,
+        circuitBreakerEvents: {
+          opened: 0,
+          closed: 0,
+          halfOpen: 0
+        },
+        agentEvents: {
+          restarted: 0,
+          recovered: 0,
+          degraded: 0
+        }
+      },
+      logs: [`Test started at ${new Date().toISOString()}`]
+    };
+    
+    // Store the test result
     this.testResults.set(testId, testResult);
     
-    // Start the test in the background
-    const testPromise = this.executeTest(testId, options);
+    // Start the test
+    log(`Starting resilience test ${testId} for agent ${testOptions.targetAgentId}`, 'resilience-tester');
+    this.executeTest(testId);
     
-    // Register a timeout to stop the test if it runs too long
-    const testTimeout = setTimeout(() => {
-      this.stopTest(testId);
-    }, options.duration || 60000); // Default 1 minute
-    
-    this.activeTests.set(testId, testTimeout);
-    
-    // Return test ID for later reference
     return testId;
   }
-
+  
   /**
-   * Stop an active test
-   */
-  public stopTest(testId: string): void {
-    const timeout = this.activeTests.get(testId);
-    if (timeout) {
-      clearTimeout(timeout);
-      this.activeTests.delete(testId);
-      
-      // Update test result
-      const result = this.testResults.get(testId);
-      if (result) {
-        result.endTime = new Date();
-      }
-      
-      console.log(`Stopped test ${testId}`);
-    } else {
-      console.warn(`No active test found with ID ${testId}`);
-    }
-  }
-
-  /**
-   * Get test results
+   * Get the result of a test
    */
   public getTestResult(testId: string): TestResult | undefined {
     return this.testResults.get(testId);
   }
-
+  
   /**
    * Get all test results
    */
   public getAllTestResults(): TestResult[] {
     return Array.from(this.testResults.values());
   }
-
+  
   /**
-   * Execute a resilience test based on options
+   * Cancel a running test
    */
-  private async executeTest(testId: string, options: TestOptions): Promise<void> {
-    const { failureType, targetAgentId } = options;
-    
-    try {
-      console.log(`Starting ${failureType} test on agent ${targetAgentId} (${testId})`);
+  public cancelTest(testId: string): boolean {
+    if (this.activeTests.has(testId)) {
+      clearInterval(this.activeTests.get(testId)!);
+      this.activeTests.delete(testId);
       
-      // Track initial agent state
-      const initialAgentHealth = this.agentManager.getAgentHealth(targetAgentId);
-      const initialCircuitState = this.circuitBreakerRegistry.getBreaker(targetAgentId)?.getStats();
-      
-      switch (failureType) {
-        case FailureType.MESSAGE_TIMEOUT:
-          await this.runMessageTimeoutTest(testId, options);
-          break;
-          
-        case FailureType.MESSAGE_ERROR:
-          await this.runMessageErrorTest(testId, options);
-          break;
-          
-        case FailureType.AGENT_CRASH:
-          await this.runAgentCrashTest(testId, options);
-          break;
-          
-        case FailureType.HIGH_CPU_LOAD:
-          await this.runHighCpuLoadTest(testId, options);
-          break;
-          
-        case FailureType.MEMORY_LEAK:
-          await this.runMemoryLeakTest(testId, options);
-          break;
-          
-        case FailureType.NETWORK_PARTITION:
-          await this.runNetworkPartitionTest(testId, options);
-          break;
-          
-        default:
-          throw new Error(`Unknown failure type: ${failureType}`);
+      const testResult = this.testResults.get(testId);
+      if (testResult) {
+        testResult.status = 'failed';
+        testResult.endTime = new Date();
+        testResult.logs.push(`Test cancelled at ${testResult.endTime.toISOString()}`);
       }
       
-      // Check for recovery
-      await this.verifyRecovery(testId, targetAgentId, initialAgentHealth, initialCircuitState);
+      return true;
+    }
+    
+    return false;
+  }
+  
+  /**
+   * Clean up all tests
+   */
+  public dispose(): void {
+    // Cancel all active tests
+    for (const [testId, timer] of this.activeTests.entries()) {
+      clearInterval(timer);
       
-    } catch (error) {
-      console.error(`Error during test ${testId}:`, error);
-      
-      // Update test result with error
-      const result = this.testResults.get(testId);
-      if (result) {
-        result.failureCount++;
-        result.endTime = new Date();
+      const testResult = this.testResults.get(testId);
+      if (testResult && testResult.status === 'running') {
+        testResult.status = 'failed';
+        testResult.endTime = new Date();
+        testResult.logs.push(`Test aborted during tester disposal at ${testResult.endTime.toISOString()}`);
       }
     }
+    
+    this.activeTests.clear();
+    
+    log('Agent Resilience Tester disposed', 'resilience-tester');
   }
-
+  
   /**
-   * Run a test that simulates message timeouts
+   * Execute a test based on the failure type
    */
-  private async runMessageTimeoutTest(testId: string, options: TestOptions): Promise<void> {
-    const { targetAgentId, failureRate = 0.5, failureCount = 10, delayBetweenFailures = 1000 } = options;
-    const result = this.testResults.get(testId)!;
-    
-    // Create a mock agent for sending test messages
-    const mockAgentId = `tester:${testId}`;
-    
-    for (let i = 0; i < failureCount; i++) {
-      // Wait between failures if specified
-      if (i > 0 && delayBetweenFailures) {
-        await new Promise(resolve => setTimeout(resolve, delayBetweenFailures));
-      }
-      
-      // Check if test was stopped
-      if (!this.activeTests.has(testId)) {
-        break;
-      }
-      
-      // Decide whether this message should time out (based on failure rate)
-      const shouldFail = Math.random() < failureRate;
-      
-      if (shouldFail) {
-        // Create a message that will cause a timeout
-        // Here we're simulating by creating a message with special marker
-        const message: AgentMessage = {
-          id: `timeout_test_${Date.now()}_${i}`,
-          source: mockAgentId,
-          destination: targetAgentId,
-          eventType: '__TEST_TIMEOUT__',
-          correlationId: null,
-          timestamp: new Date(),
-          payload: {
-            testId,
-            iteration: i,
-            shouldTimeout: true
-          }
-        };
-        
-        const startTime = Date.now();
-        
-        try {
-          // In a real implementation, we'd use our enhanced bus with a low timeout value
-          // Here we're just simulating the timeout
-          await new Promise((resolve, reject) => {
-            setTimeout(() => reject(new Error('Simulated timeout')), 1000);
-          });
-          
-          result.successCount++;
-        } catch (error) {
-          const latency = Date.now() - startTime;
-          result.failureCount++;
-          result.metrics.messageLatencies.push(latency);
-          
-          // Check if circuit breaker was tripped
-          const breakerStats = this.circuitBreakerRegistry.getBreaker(targetAgentId)?.getStats();
-          if (breakerStats && breakerStats.state === 'OPEN') {
-            result.circuitBreakerTripped = true;
-          }
-        }
-      } else {
-        // Send a normal message that should succeed
-        const message: AgentMessage = {
-          id: `normal_test_${Date.now()}_${i}`,
-          source: mockAgentId,
-          destination: targetAgentId,
-          eventType: MessageEventType.PING,
-          correlationId: null,
-          timestamp: new Date(),
-          payload: {
-            testId,
-            iteration: i
-          }
-        };
-        
-        const startTime = Date.now();
-        
-        try {
-          // We'd use our real enhanced bus here in a real implementation
-          // For now, we're just simulating success
-          await new Promise(resolve => setTimeout(resolve, 50));
-          
-          const latency = Date.now() - startTime;
-          result.successCount++;
-          result.metrics.messageLatencies.push(latency);
-        } catch (error) {
-          result.failureCount++;
-        }
-      }
+  private executeTest(testId: string): void {
+    const testResult = this.testResults.get(testId);
+    if (!testResult) {
+      log(`Test ${testId} not found`, 'resilience-tester');
+      return;
     }
-  }
-
-  /**
-   * Run a test that simulates message errors
-   */
-  private async runMessageErrorTest(testId: string, options: TestOptions): Promise<void> {
-    // Similar to timeout test but with error responses instead of timeouts
-    await this.runMessageTimeoutTest(testId, options);
-  }
-
-  /**
-   * Run a test that simulates agent crashes
-   */
-  private async runAgentCrashTest(testId: string, options: TestOptions): Promise<void> {
-    const { targetAgentId, failureCount = 1, delayBetweenFailures = 5000 } = options;
-    const result = this.testResults.get(testId)!;
     
-    for (let i = 0; i < failureCount; i++) {
-      // Wait between failures if specified
-      if (i > 0 && delayBetweenFailures) {
-        await new Promise(resolve => setTimeout(resolve, delayBetweenFailures));
+    const { failureType, targetAgentId, failureCount, delayBetweenFailures } = testResult.options;
+    
+    // Create an interval to simulate failures
+    let count = 0;
+    const timer = setInterval(() => {
+      // Check if we've reached the failure count
+      if (count >= failureCount!) {
+        this.completeTest(testId);
+        return;
       }
       
-      // Check if test was stopped
-      if (!this.activeTests.has(testId)) {
-        break;
-      }
+      // Simulate the failure
+      this.simulateFailure(testId, failureType, targetAgentId);
       
-      console.log(`Simulating crash of agent ${targetAgentId} (iteration ${i + 1}/${failureCount})`);
+      // Increment the count
+      count++;
       
-      try {
-        // In a real implementation, we would either:
-        // 1. Force the agent to throw an unhandled exception, or
-        // 2. Call a method on the agent that simulates a crash
-        
-        // For now, we'll just stop the agent to simulate a crash
-        await this.agentManager.stopAgent(targetAgentId);
-        
-        // Record that the "crash" happened
-        result.failureCount++;
-        
-        // Wait a bit to let the system detect the "crash"
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // The agent manager should auto-restart the agent
-        // We'll check if this happened in verifyRecovery
-      } catch (error) {
-        console.error(`Error during agent crash test (${targetAgentId}):`, error);
-      }
-    }
-  }
-
-  /**
-   * Run a test that simulates high CPU load
-   */
-  private async runHighCpuLoadTest(testId: string, options: TestOptions): Promise<void> {
-    const { targetAgentId, duration = 10000, loadFactor = 5 } = options;
-    const result = this.testResults.get(testId)!;
+    }, delayBetweenFailures);
     
-    console.log(`Simulating high CPU load on agent ${targetAgentId} for ${duration}ms (load factor: ${loadFactor})`);
+    // Store the timer
+    this.activeTests.set(testId, timer);
     
-    try {
-      // In a real implementation, we would inject code that creates high CPU usage
-      // For now, we'll just record that we simulated it
-      
-      // Record CPU measurements at intervals
-      const startTime = Date.now();
-      const endTime = startTime + duration;
-      
-      while (Date.now() < endTime && this.activeTests.has(testId)) {
-        // Simulate a CPU usage measurement
-        const cpuUsage = Math.min(0.9, Math.random() * loadFactor);
-        result.metrics.cpuUsage = result.metrics.cpuUsage || [];
-        result.metrics.cpuUsage.push(cpuUsage);
-        
-        // Wait a bit before next measurement
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-    } catch (error) {
-      console.error(`Error during high CPU load test (${targetAgentId}):`, error);
-    }
-  }
-
-  /**
-   * Run a test that simulates memory leaks
-   */
-  private async runMemoryLeakTest(testId: string, options: TestOptions): Promise<void> {
-    const { targetAgentId, duration = 10000 } = options;
-    const result = this.testResults.get(testId)!;
-    
-    console.log(`Simulating memory leak on agent ${targetAgentId} for ${duration}ms`);
-    
-    try {
-      // In a real implementation, we would inject code that creates memory leaks
-      // For now, we'll just record that we simulated it
-      
-      // Record memory measurements at intervals
-      const startTime = Date.now();
-      const endTime = startTime + duration;
-      
-      let simulatedMemoryUsage = 100; // Starting point in MB
-      
-      while (Date.now() < endTime && this.activeTests.has(testId)) {
-        // Simulate increasing memory usage
-        simulatedMemoryUsage += 10; // Add 10MB each iteration
-        result.metrics.memoryUsage = result.metrics.memoryUsage || [];
-        result.metrics.memoryUsage.push(simulatedMemoryUsage);
-        
-        // Wait a bit before next measurement
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-    } catch (error) {
-      console.error(`Error during memory leak test (${targetAgentId}):`, error);
-    }
-  }
-
-  /**
-   * Run a test that simulates network partitions
-   */
-  private async runNetworkPartitionTest(testId: string, options: TestOptions): Promise<void> {
-    const { targetAgentId, duration = 5000 } = options;
-    const result = this.testResults.get(testId)!;
-    
-    console.log(`Simulating network partition for agent ${targetAgentId} for ${duration}ms`);
-    
-    try {
-      // In a real implementation, we would block messages to/from the agent
-      // For now, we'll just record that we simulated it
-      
-      // Record the start of the partition
-      result.failureCount++;
-      
-      // Wait for the partition duration
-      await new Promise(resolve => setTimeout(resolve, duration));
-      
-      // Record the end of the partition (if test is still running)
+    // Set a timeout to complete the test if it runs too long
+    setTimeout(() => {
       if (this.activeTests.has(testId)) {
-        result.successCount++;
+        this.completeTest(testId);
       }
-    } catch (error) {
-      console.error(`Error during network partition test (${targetAgentId}):`, error);
-    }
+    }, testResult.options.durationMs);
   }
-
+  
   /**
-   * Verify that the system recovered after a test
+   * Complete a test
    */
-  private async verifyRecovery(
-    testId: string,
-    targetAgentId: string,
-    initialAgentHealth: any,
-    initialCircuitState: any
-  ): Promise<void> {
-    const result = this.testResults.get(testId)!;
-    const startTime = Date.now();
-    
-    console.log(`Verifying recovery for agent ${targetAgentId} after test ${testId}`);
-    
-    // Wait for a little bit to allow recovery processes to start
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Check recovery for up to 30 seconds
-    const maxCheckTime = 30000;
-    let recovered = false;
-    
-    while (Date.now() - startTime < maxCheckTime && !recovered) {
-      // Get current agent health
-      const currentHealth = this.agentManager.getAgentHealth(targetAgentId);
+  private completeTest(testId: string): void {
+    if (this.activeTests.has(testId)) {
+      clearInterval(this.activeTests.get(testId)!);
+      this.activeTests.delete(testId);
       
-      // Check if agent is back to healthy state
-      if (currentHealth && currentHealth.status === AgentStatus.READY && currentHealth.healthCheck.isHealthy) {
-        // Get current circuit breaker state
-        const currentCircuitState = this.circuitBreakerRegistry.getBreaker(targetAgentId)?.getStats();
+      const testResult = this.testResults.get(testId);
+      if (testResult) {
+        testResult.status = 'completed';
+        testResult.endTime = new Date();
+        testResult.logs.push(`Test completed at ${testResult.endTime.toISOString()}`);
         
-        // Check if circuit breaker is closed again (if it was tripped)
-        if (!result.circuitBreakerTripped || (currentCircuitState && currentCircuitState.state === 'CLOSED')) {
-          recovered = true;
-          
-          // Record recovery time
-          result.recoveryTime = Date.now() - startTime;
-          
-          // Check if agent was restarted
-          result.agentRestarted = initialAgentHealth && 
-            currentHealth && 
-            currentHealth.healthCheck.restartAttempts > initialAgentHealth.healthCheck.restartAttempts;
-            
-          console.log(`Agent ${targetAgentId} recovered after ${result.recoveryTime}ms (restarted: ${result.agentRestarted})`);
-          break;
-        }
+        log(`Resilience test ${testId} completed. Simulated ${testResult.stats.failuresSimulated} failures.`, 'resilience-tester');
       }
-      
-      // Wait before checking again
-      await new Promise(resolve => setTimeout(resolve, 1000));
     }
-    
-    if (!recovered) {
-      console.warn(`Agent ${targetAgentId} did not recover within ${maxCheckTime}ms after test ${testId}`);
-    }
-    
-    // Update test end time
-    result.endTime = new Date();
   }
-
+  
   /**
-   * Validate test options
+   * Simulate a specific type of failure
    */
-  private validateOptions(options: TestOptions): void {
-    const { failureType, targetAgentId, failureRate, failureCount, duration } = options;
+  private simulateFailure(testId: string, failureType: FailureType, targetAgentId: string): void {
+    const testResult = this.testResults.get(testId)!;
+    testResult.stats.failuresSimulated++;
     
-    if (!Object.values(FailureType).includes(failureType as any)) {
-      throw new Error(`Invalid failure type: ${failureType}`);
+    switch (failureType) {
+      case FailureType.MESSAGE_TIMEOUT:
+        this.simulateMessageTimeout(testId, targetAgentId);
+        break;
+      case FailureType.MESSAGE_ERROR:
+        this.simulateMessageError(testId, targetAgentId);
+        break;
+      case FailureType.AGENT_CRASH:
+        this.simulateAgentCrash(testId, targetAgentId);
+        break;
+      case FailureType.MEMORY_LEAK:
+        this.simulateMemoryLeak(testId, targetAgentId);
+        break;
+      case FailureType.HIGH_CPU_USAGE:
+        this.simulateHighCpuUsage(testId, targetAgentId);
+        break;
+      case FailureType.RANDOM_FAILURES:
+        this.simulateRandomFailure(testId, targetAgentId);
+        break;
     }
+  }
+  
+  /**
+   * Simulate a message timeout
+   */
+  private simulateMessageTimeout(testId: string, targetAgentId: string): void {
+    const testResult = this.testResults.get(testId)!;
     
-    if (!targetAgentId) {
-      throw new Error('Target agent ID is required');
-    }
+    // Create a test message that will time out
+    const message: AgentMessage = {
+      messageId: `test-${testId}-${Date.now()}`,
+      correlationId: undefined,
+      timestamp: new Date(),
+      source: 'resilience-tester',
+      destination: targetAgentId,
+      eventType: "__TEST_TIMEOUT__" as unknown as MessageEventType,
+      payload: {
+        testId,
+        simulatedFailure: FailureType.MESSAGE_TIMEOUT
+      },
+      metadata: {
+        priority: 'LOW'
+      },
+      requiresResponse: true
+    };
     
-    if (failureRate !== undefined && (failureRate < 0 || failureRate > 1)) {
-      throw new Error('Failure rate must be between 0 and 1');
+    // Attempt to send the message
+    // In a real scenario, we would intercept this message in a test adapter
+    // that would simulate a timeout by never responding
+    try {
+      // In a real implementation, we might emit a message on a test bus
+      log(`Simulating message timeout to ${targetAgentId}`, 'resilience-tester');
+      
+      // Track in the test logs
+      testResult.logs.push(`Simulated timeout message ${message.messageId} to ${targetAgentId}`);
+      
+    } catch (error) {
+      log(`Error simulating message timeout: ${error}`, 'resilience-tester');
+      testResult.logs.push(`Error simulating timeout: ${error}`);
     }
+  }
+  
+  /**
+   * Simulate a message error
+   */
+  private simulateMessageError(testId: string, targetAgentId: string): void {
+    const testResult = this.testResults.get(testId)!;
     
-    if (failureCount !== undefined && failureCount < 0) {
-      throw new Error('Failure count must be non-negative');
-    }
+    // Create a test message that will cause an error
+    const message: AgentMessage = {
+      messageId: `test-${testId}-${Date.now()}`,
+      correlationId: undefined,
+      timestamp: new Date(),
+      source: 'resilience-tester',
+      destination: targetAgentId,
+      eventType: 'PING' as unknown as MessageEventType,
+      payload: {
+        testId,
+        simulatedFailure: FailureType.MESSAGE_ERROR,
+        triggerError: true
+      },
+      metadata: {
+        priority: 'LOW'
+      },
+      requiresResponse: true
+    };
     
-    if (duration !== undefined && duration < 0) {
-      throw new Error('Duration must be non-negative');
+    // Attempt to send the message
+    try {
+      // In a real implementation, we would use a test hook to inject an error
+      log(`Simulating message error for ${targetAgentId}`, 'resilience-tester');
+      
+      // Track in the test logs
+      testResult.logs.push(`Simulated error message ${message.messageId} to ${targetAgentId}`);
+      
+      // Force the circuit breaker to register a failure
+      const breaker = this.circuitRegistry.getBreaker(targetAgentId);
+      breaker.registerFailure(new Error('Simulated message error'));
+      
+    } catch (error) {
+      log(`Error simulating message error: ${error}`, 'resilience-tester');
+      testResult.logs.push(`Error in error simulation: ${error}`);
     }
+  }
+  
+  /**
+   * Simulate an agent crash
+   */
+  private simulateAgentCrash(testId: string, targetAgentId: string): void {
+    const testResult = this.testResults.get(testId)!;
+    
+    try {
+      log(`Simulating agent crash for ${targetAgentId}`, 'resilience-tester');
+      testResult.logs.push(`Simulating crash of agent ${targetAgentId}`);
+      
+      // In a real scenario, we would have a hook to trigger agent termination
+      // Here we just force the agent manager to mark the agent as failed
+      this.agentManager.simulateAgentFailure(targetAgentId);
+      
+    } catch (error) {
+      log(`Error simulating agent crash: ${error}`, 'resilience-tester');
+      testResult.logs.push(`Error simulating crash: ${error}`);
+    }
+  }
+  
+  /**
+   * Simulate a memory leak (not fully implemented in this version)
+   */
+  private simulateMemoryLeak(testId: string, targetAgentId: string): void {
+    const testResult = this.testResults.get(testId)!;
+    
+    log(`Simulating memory leak for ${targetAgentId} (placeholder)`, 'resilience-tester');
+    testResult.logs.push(`Simulating memory leak in agent ${targetAgentId} (placeholder)`);
+    
+    // In a real scenario, we would inject a memory leak in the agent
+    // For this demo, we just log it as a placeholder
+  }
+  
+  /**
+   * Simulate high CPU usage (not fully implemented in this version)
+   */
+  private simulateHighCpuUsage(testId: string, targetAgentId: string): void {
+    const testResult = this.testResults.get(testId)!;
+    
+    log(`Simulating high CPU usage for ${targetAgentId} (placeholder)`, 'resilience-tester');
+    testResult.logs.push(`Simulating high CPU in agent ${targetAgentId} (placeholder)`);
+    
+    // In a real scenario, we would trigger high CPU usage in the agent
+    // For this demo, we just log it as a placeholder
+  }
+  
+  /**
+   * Simulate a random failure
+   */
+  private simulateRandomFailure(testId: string, targetAgentId: string): void {
+    const testResult = this.testResults.get(testId)!;
+    
+    // Pick a random failure type to simulate
+    const failureTypes = [
+      FailureType.MESSAGE_TIMEOUT,
+      FailureType.MESSAGE_ERROR,
+      FailureType.AGENT_CRASH
+    ];
+    
+    const randomType = failureTypes[Math.floor(Math.random() * failureTypes.length)];
+    
+    log(`Simulating random failure (${randomType}) for ${targetAgentId}`, 'resilience-tester');
+    testResult.logs.push(`Simulating random failure (${randomType}) for ${targetAgentId}`);
+    
+    // Simulate the selected failure type
+    this.simulateFailure(testId, randomType, targetAgentId);
   }
 }
