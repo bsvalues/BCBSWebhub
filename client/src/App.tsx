@@ -11,6 +11,7 @@ import AccountManagement from "@/pages/account-management";
 import StyleDemo from "@/pages/style-demo";
 import ModernStyleDemo from "@/pages/modern-style-demo";
 import GISDashboard from "@/pages/gis-dashboard";
+import { AdvancedAnalyticsPage } from "./pages/AdvancedAnalyticsPage";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import ConnectionAlert from "./components/connection-alert";
 import { Loader2 } from "lucide-react";
