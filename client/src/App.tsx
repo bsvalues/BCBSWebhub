@@ -58,6 +58,7 @@ function AuthenticatedApp() {
           <Route path="/account" component={AccountManagement} />
           <Route path="/modern-style-demo" component={ModernStyleDemo} />
           <Route path="/gis-dashboard" component={GISDashboard} />
+          <Route path="/advanced-analytics" component={AdvancedAnalyticsPage} />
           <Route path="/style-demo" component={StyleDemo} />
           <Route component={NotFound} />
         </Switch>

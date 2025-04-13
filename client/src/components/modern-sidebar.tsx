@@ -8,6 +8,7 @@ import {
   Home,
   Plus,
   Layers,
+  LineChart,
   Settings,
   Search,
   HelpCircle,
@@ -274,6 +275,13 @@ export default function ModernSidebar() {
                 label="Analytics Dashboard"
                 isCollapsed={isCollapsed}
                 isActive={location === "/analytics"}
+              />
+              <SidebarLink
+                href="/advanced-analytics"
+                icon={<LineChart size={18} />}
+                label="Advanced Analytics"
+                isCollapsed={isCollapsed}
+                isActive={location === "/advanced-analytics"}
               />
               <SidebarLink
                 href="/reports"

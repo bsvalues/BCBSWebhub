@@ -19,7 +19,8 @@ import {
   Layers,
   Home,
   PanelLeftClose,
-  BookOpen
+  BookOpen,
+  LineChart
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -112,6 +113,7 @@ export default function ModernHeader() {
               <NavLink href="/create-audit" icon={FilePlus2} label="New Audit" />
               <NavLink href="/audit-history" icon={History} label="History" />
               <NavLink href="/analytics" icon={BarChart3} label="Analytics" />
+              <NavLink href="/advanced-analytics" icon={LineChart} label="Advanced Analytics" />
               <NavLink href="/modern-style-demo" icon={Layers} label="GIS View" />
               <NavLink href="/style-demo" icon={BookOpen} label="Style Guide" />
             </nav>
@@ -256,6 +258,7 @@ export default function ModernHeader() {
                 <NavLink href="/create-audit" icon={FilePlus2} label="New Audit" />
                 <NavLink href="/audit-history" icon={History} label="History" />
                 <NavLink href="/analytics" icon={BarChart3} label="Analytics" />
+                <NavLink href="/advanced-analytics" icon={LineChart} label="Advanced Analytics" />
                 <NavLink href="/modern-style-demo" icon={Layers} label="GIS View" />
                 <NavLink href="/style-demo" icon={BookOpen} label="Style Guide" />
               </div>
