@@ -1,190 +1,267 @@
 /**
  * Agent Resilience Integration
  * 
- * Provides a facade for integrating all resilience-related features:
- * - Circuit breaker integration
- * - Enhanced agent management
- * - Resilience testing
+ * Integrates all resilience features into a cohesive solution:
+ * - Circuit breaker pattern
+ * - Self-healing capabilities
  * - Health monitoring
+ * 
+ * This serves as the main entry point for resilience features
  */
 
-import { AgentCommunicationBus } from '@shared/protocols/agent-communication';
-import { CircuitBreakerRegistry } from '../utils/circuit-breaker-registry';
-import { EnhancedAgentManager, AgentConfig } from './enhanced-agent-manager';
-import { AgentResilienceTester, TestOptions, TestResult } from '../utils/agent-resilience-tester';
+import { AgentCommunicationBus, AgentType } from '@shared/protocols/agent-communication';
 import { EnhancedCommunicationBus } from '@shared/protocols/enhanced-agent-communication';
+import { CircuitBreakerRegistry } from '../utils/circuit-breaker-registry';
+import { EnhancedAgentManager, AgentConfig, AgentHealth } from './enhanced-agent-manager';
+import { log } from '../vite';
 
 /**
- * Agent Resilience Integration Facade
+ * Agent Resilience Integration
+ * 
+ * Provides a unified interface for resilience features
  */
 export class AgentResilienceIntegration {
   private circuitBreakerRegistry: CircuitBreakerRegistry;
-  private agentManager: EnhancedAgentManager;
-  private resilienceTester: AgentResilienceTester;
   private enhancedBus: EnhancedCommunicationBus;
-  private healthCheckInterval?: NodeJS.Timeout;
+  private agentManager: EnhancedAgentManager;
+  private initialized: boolean = false;
   
-  constructor(baseCommunicationBus: AgentCommunicationBus) {
-    // Create circuit breaker registry
+  constructor(baseBus: AgentCommunicationBus) {
+    // Create the circuit breaker registry with default settings
     this.circuitBreakerRegistry = new CircuitBreakerRegistry({
-      failureThreshold: 3,
-      resetTimeout: 15000,  // 15 seconds to reset
-      halfOpenSuccessThreshold: 2
+      failureThreshold: 5,       // 5 consecutive failures opens the circuit
+      resetTimeout: 10000,       // 10 seconds before trying half-open
+      halfOpenSuccessThreshold: 2 // 2 successful requests to close the circuit
     });
     
-    // Create enhanced communication bus with circuit breaker integration
-    this.enhancedBus = new EnhancedCommunicationBus(
-      baseCommunicationBus,
-      this.circuitBreakerRegistry
-    );
+    // Create the enhanced communication bus
+    this.enhancedBus = new EnhancedCommunicationBus(baseBus, this.circuitBreakerRegistry);
     
-    // Create enhanced agent manager
+    // Create the enhanced agent manager
     this.agentManager = new EnhancedAgentManager(this.enhancedBus);
     
-    // Create resilience tester
-    this.resilienceTester = new AgentResilienceTester(
-      this.agentManager,
-      this.circuitBreakerRegistry
-    );
-    
-    console.log('Agent Resilience Integration initialized');
+    log('Agent resilience integration created', 'resilience');
   }
   
   /**
    * Initialize the resilience integration
    */
   public async initialize(): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+    
+    // Initialize the enhanced bus
+    await this.enhancedBus.initialize();
+    
+    // Initialize the agent manager
     await this.agentManager.initialize();
     
-    // Start health check interval
-    this.healthCheckInterval = setInterval(() => this.checkSystemHealth(), 60000);
-    
-    console.log('Agent Resilience Integration started');
+    this.initialized = true;
+    log('Agent resilience integration initialized', 'resilience');
   }
   
   /**
    * Register an agent with resilience features
    */
   public registerAgent(config: AgentConfig): void {
-    this.agentManager.registerAgent(config);
+    this.verifyInitialized();
     
-    // Ensure circuit breaker exists for the agent
-    if (!this.circuitBreakerRegistry.hasBreaker(config.agentId)) {
-      this.circuitBreakerRegistry.getBreaker(config.agentId);
-    }
+    this.agentManager.registerAgent(config);
+    log(`Registered agent ${config.agentId} with resilience features`, 'resilience');
   }
   
   /**
    * Start all registered agents
    */
   public async startAllAgents(): Promise<void> {
+    this.verifyInitialized();
+    
     await this.agentManager.startAllAgents();
+    log('Started all agents with resilience features', 'resilience');
+  }
+  
+  /**
+   * Start a specific agent
+   */
+  public async startAgent(agentId: string): Promise<void> {
+    this.verifyInitialized();
+    
+    await this.agentManager.startAgent(agentId);
+    log(`Started agent ${agentId} with resilience features`, 'resilience');
+  }
+  
+  /**
+   * Stop a specific agent
+   */
+  public async stopAgent(agentId: string): Promise<void> {
+    this.verifyInitialized();
+    
+    await this.agentManager.stopAgent(agentId);
+    log(`Stopped agent ${agentId}`, 'resilience');
+  }
+  
+  /**
+   * Restart a specific agent
+   */
+  public async restartAgent(agentId: string): Promise<void> {
+    this.verifyInitialized();
+    
+    await this.agentManager.restartAgent(agentId);
+    log(`Restarted agent ${agentId}`, 'resilience');
   }
   
   /**
    * Get the enhanced communication bus
    */
   public getEnhancedBus(): EnhancedCommunicationBus {
+    this.verifyInitialized();
+    
     return this.enhancedBus;
+  }
+  
+  /**
+   * Get the circuit breaker registry
+   */
+  public getCircuitBreakerRegistry(): CircuitBreakerRegistry {
+    return this.circuitBreakerRegistry;
   }
   
   /**
    * Get the enhanced agent manager
    */
   public getAgentManager(): EnhancedAgentManager {
+    this.verifyInitialized();
+    
     return this.agentManager;
   }
   
   /**
-   * Run a resilience test
+   * Get health of all agents
    */
-  public async runResilienceTest(options: TestOptions): Promise<string> {
-    return this.resilienceTester.runTest(options);
-  }
-  
-  /**
-   * Get test results
-   */
-  public getTestResult(testId: string): TestResult | undefined {
-    return this.resilienceTester.getTestResult(testId);
-  }
-  
-  /**
-   * Get all test results
-   */
-  public getAllTestResults(): TestResult[] {
-    return this.resilienceTester.getAllTestResults();
-  }
-  
-  /**
-   * Get system health status
-   */
-  public getSystemHealth(): any {
-    return {
-      agents: this.agentManager.getAllAgentsHealth(),
-      circuitBreakers: this.circuitBreakerRegistry.getAllStats(),
-      timestamp: new Date()
-    };
-  }
-  
-  /**
-   * Stop all agents and shutdown resilience integration
-   */
-  public async shutdown(): Promise<void> {
-    console.log('Shutting down Agent Resilience Integration');
+  public getSystemHealth(): Record<string, AgentHealth> {
+    this.verifyInitialized();
     
-    // Clear health check interval
-    if (this.healthCheckInterval) {
-      clearInterval(this.healthCheckInterval);
+    const agentHealth = this.agentManager.getAllAgentsHealth();
+    const circuitBreakerStats = this.circuitBreakerRegistry.getAllStats();
+    
+    // Combine with circuit breaker stats for a comprehensive health view
+    for (const [agentId, health] of Object.entries(agentHealth)) {
+      if (circuitBreakerStats[agentId]) {
+        if (!health.metrics) {
+          health.metrics = {};
+        }
+        health.metrics.circuitBreaker = circuitBreakerStats[agentId];
+      }
     }
     
-    // Stop all agents
-    await this.agentManager.shutdown();
-    
-    // Clean up circuit breakers
-    this.circuitBreakerRegistry.dispose();
-    
-    console.log('Agent Resilience Integration shutdown complete');
+    return agentHealth;
   }
   
   /**
-   * Periodically check system health and log any issues
+   * Get health of a specific agent
    */
-  private checkSystemHealth(): void {
-    try {
-      const health = this.getSystemHealth();
-      const agentCount = Object.keys(health.agents).length;
-      const healthyAgentCount = Object.values(health.agents)
-        .filter((agent: any) => agent.healthCheck.isHealthy)
-        .length;
-      
-      const circuitBreakerCount = Object.keys(health.circuitBreakers).length;
-      const openCircuitCount = Object.values(health.circuitBreakers)
-        .filter((breaker: any) => breaker.state === 'OPEN')
-        .length;
-      
-      console.log(`System health: ${healthyAgentCount}/${agentCount} agents healthy, ` +
-                 `${openCircuitCount}/${circuitBreakerCount} circuits open`);
-      
-      // Check for unhealthy agents and log warnings
-      for (const [agentId, agent] of Object.entries(health.agents)) {
-        if (!(agent as any).healthCheck.isHealthy) {
-          console.warn(`Unhealthy agent detected: ${agentId}, ` +
-                      `status: ${(agent as any).status}, ` +
-                      `consecutive failures: ${(agent as any).healthCheck.consecutiveFailures}`);
-        }
+  public getAgentHealth(agentId: string): AgentHealth | undefined {
+    this.verifyInitialized();
+    
+    const health = this.agentManager.getAgentHealth(agentId);
+    if (!health) {
+      return undefined;
+    }
+    
+    // Add circuit breaker stats to health
+    const circuitStats = this.circuitBreakerRegistry.getStats(agentId);
+    if (!health.metrics) {
+      health.metrics = {};
+    }
+    health.metrics.circuitBreaker = circuitStats;
+    
+    return health;
+  }
+  
+  /**
+   * Reset a circuit breaker for an agent
+   */
+  public resetCircuitBreaker(agentId: string): boolean {
+    return this.circuitBreakerRegistry.resetBreaker(agentId);
+  }
+  
+  /**
+   * Get all unhealthy agents
+   */
+  public getUnhealthyAgents(): string[] {
+    this.verifyInitialized();
+    
+    return this.agentManager.getUnhealthyAgents();
+  }
+  
+  /**
+   * Get all circuit breakers in open state
+   */
+  public getOpenCircuits(): string[] {
+    // Import CircuitState from circuit-breaker.ts
+    const { CircuitState } = require('../utils/circuit-breaker');
+    return this.circuitBreakerRegistry.getBreakersInState(CircuitState.OPEN);
+  }
+  
+  /**
+   * Run a diagnostic test on the resilience system
+   */
+  public async runDiagnostic(): Promise<Record<string, any>> {
+    this.verifyInitialized();
+    
+    const diagnostic: Record<string, any> = {
+      timestamp: new Date().toISOString(),
+      circuitBreakers: {
+        total: this.circuitBreakerRegistry.getBreakerCount(),
+        stateCounts: this.circuitBreakerRegistry.getStateCount(),
+        openCircuits: this.getOpenCircuits()
+      },
+      agents: {
+        health: this.getSystemHealth(),
+        unhealthy: this.getUnhealthyAgents()
       }
-      
-      // Check for open circuit breakers and log warnings
-      for (const [breaker, stats] of Object.entries(health.circuitBreakers)) {
-        if ((stats as any).state === 'OPEN') {
-          console.warn(`Open circuit breaker detected for ${breaker}: ` +
-                      `failures: ${(stats as any).failures}, ` +
-                      `last failure: ${new Date((stats as any).lastFailureTime).toISOString()}`);
-        }
-      }
-    } catch (error) {
-      console.error('Error checking system health:', error);
+    };
+    
+    return diagnostic;
+  }
+  
+  /**
+   * Simulate agent failure (for testing)
+   */
+  public simulateAgentFailure(agentId: string): void {
+    this.verifyInitialized();
+    
+    this.agentManager.simulateAgentFailure(agentId);
+    log(`Simulated failure of agent ${agentId}`, 'resilience');
+  }
+  
+  /**
+   * Shutdown all resilience features
+   */
+  public async shutdown(): Promise<void> {
+    if (!this.initialized) {
+      return;
+    }
+    
+    log('Shutting down agent resilience integration', 'resilience');
+    
+    // Shutdown the agent manager
+    await this.agentManager.shutdown();
+    
+    // Dispose circuit breakers
+    this.circuitBreakerRegistry.dispose();
+    
+    this.initialized = false;
+    log('Agent resilience integration shutdown complete', 'resilience');
+  }
+  
+  /**
+   * Verify that the resilience integration is initialized
+   */
+  private verifyInitialized(): void {
+    if (!this.initialized) {
+      throw new Error('Agent resilience integration not initialized. Call initialize() first.');
     }
   }
 }

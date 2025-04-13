@@ -1,300 +1,310 @@
 /**
- * Enhanced Agent Communication
+ * Enhanced Agent Communication Protocol
  * 
- * Provides enhanced communication capabilities with circuit-breaker
- * pattern integration and resilience features.
+ * Extends the base communication protocol with resilience features:
+ * - Circuit breaker protection
+ * - Health check messaging
+ * - Status monitoring
  */
 
-import { 
-  AgentCommunicationBus,
-  AgentMessage,
-  MessageEventType
-} from './agent-communication';
-
-import {
-  EnhancedMessageEventType,
-  createHealthCheckMessage,
-  createHealthResponseMessage,
-  createCircuitBreakerStatusMessage
-} from './enhanced-message-protocol';
-
+import { AgentCommunicationBus, AgentMessage, MessageEventType } from './agent-communication';
 import { CircuitBreakerRegistry } from '../../server/utils/circuit-breaker-registry';
-import { log } from '../../server/vite';
+import { CircuitState } from '../../server/utils/circuit-breaker';
 
 /**
- * Result of sending a message through the enhanced bus
+ * Enhanced message event types
  */
-export interface MessageSendResult {
-  success: boolean;
-  messageId?: string;
-  error?: string;
-  circuitOpen?: boolean;
+export enum EnhancedMessageEventType {
+  // Health monitoring
+  HEALTH_CHECK = 'HEALTH_CHECK',
+  HEALTH_RESPONSE = 'HEALTH_RESPONSE',
+  
+  // Circuit breaker events
+  CIRCUIT_BREAKER_OPEN = 'CIRCUIT_BREAKER_OPEN',
+  CIRCUIT_BREAKER_HALF_OPEN = 'CIRCUIT_BREAKER_HALF_OPEN',
+  CIRCUIT_BREAKER_CLOSED = 'CIRCUIT_BREAKER_CLOSED',
+  
+  // Enhanced agent lifecycle
+  AGENT_STARTING = 'AGENT_STARTING',
+  AGENT_READY = 'AGENT_READY',
+  AGENT_BUSY = 'AGENT_BUSY',
+  AGENT_ERROR = 'AGENT_ERROR',
+  AGENT_DEGRADED = 'AGENT_DEGRADED',
+  AGENT_SHUTTING_DOWN = 'AGENT_SHUTTING_DOWN',
+  AGENT_RESTARTING = 'AGENT_RESTARTING',
+  AGENT_OFFLINE = 'AGENT_OFFLINE',
+  
+  // Enhanced validation
+  VALIDATION_REQUEST = 'VALIDATION_REQUEST',
+  VALIDATION_RESPONSE = 'VALIDATION_RESPONSE'
 }
 
 /**
- * Enhanced communication bus that integrates circuit breaker pattern
+ * Health check message payload
+ */
+export interface HealthCheckPayload {
+  timestamp: number;
+  requestId: string;
+}
+
+/**
+ * Health response message payload
+ */
+export interface HealthResponsePayload {
+  timestamp: number;
+  requestId: string;
+  status: string;
+  metrics?: Record<string, any>;
+}
+
+/**
+ * Circuit breaker status payload
+ */
+export interface CircuitBreakerStatusPayload {
+  agentId: string;
+  state: CircuitState;
+  failures: number;
+  timestamp: number;
+}
+
+/**
+ * Enhanced Agent Communication Bus
+ * 
+ * Extends the base communication bus with circuit breaker protection
  */
 export class EnhancedCommunicationBus {
-  private baseBus: AgentCommunicationBus;
+  private bus: AgentCommunicationBus;
   private circuitBreakerRegistry: CircuitBreakerRegistry;
-  private messageHandlers: Map<string, Function[]> = new Map();
-  private metrics: {
-    messagesSent: number;
-    messagesReceived: number;
-    errors: number;
-    startTime: Date;
-  } = {
-    messagesSent: 0,
-    messagesReceived: 0,
-    errors: 0,
-    startTime: new Date()
-  };
-
-  constructor(
-    baseBus: AgentCommunicationBus,
-    circuitBreakerRegistry: CircuitBreakerRegistry
-  ) {
-    this.baseBus = baseBus;
+  
+  constructor(bus: AgentCommunicationBus, circuitBreakerRegistry: CircuitBreakerRegistry) {
+    this.bus = bus;
     this.circuitBreakerRegistry = circuitBreakerRegistry;
-
-    // Set up listener for all messages on the base bus
-    this.baseBus.on('message', (message: AgentMessage) => {
-      this.handleIncomingMessage(message);
-    });
-
-    log('Enhanced communication bus initialized', 'enhanced-bus');
+    
+    // Set up circuit breaker event listeners
+    this.setupCircuitBreakerListeners();
   }
-
+  
+  /**
+   * Initialize the enhanced communication bus
+   */
+  public async initialize(): Promise<void> {
+    // Nothing to initialize in this implementation
+    // In a real implementation, you might want to set up additional listeners
+    // or initialize the underlying bus
+  }
+  
   /**
    * Send a message with circuit breaker protection
    */
-  public async sendMessage(message: AgentMessage): Promise<MessageSendResult> {
-    // Get destination agent ID or service
+  public async sendMessage(message: AgentMessage): Promise<void> {
     const destination = message.destination;
-
-    // Check if circuit breaker exists and is open for this destination
+    
+    // Get circuit breaker for the destination
     const breaker = this.circuitBreakerRegistry.getBreaker(destination);
-    if (breaker.isOpen()) {
-      log(`Circuit open for ${destination}, message rejected`, 'enhanced-bus');
-      return {
-        success: false,
-        messageId: message.messageId,
-        error: `Circuit breaker for ${destination} is open`,
-        circuitOpen: true
-      };
-    }
-
+    
+    // Send the message through the circuit breaker
     try {
-      // Execute sendMessage through the circuit breaker
-      await breaker.execute(async () => {
-        await this.baseBus.sendMessage(message);
-      });
-
-      // Update metrics
-      this.metrics.messagesSent++;
-
-      return {
-        success: true,
-        messageId: message.messageId
-      };
+      await breaker.execute(() => this.bus.sendMessage(message));
     } catch (error) {
-      // Update metrics
-      this.metrics.errors++;
-
-      // Log the error
-      log(`Error sending message to ${destination}: ${error}`, 'enhanced-bus');
-
-      // If the circuit is now open due to this error, broadcast a notification
-      if (breaker.isOpen()) {
-        log(`Circuit opened for ${destination} due to failures`, 'enhanced-bus');
-        
-        // Get stats for this breaker
-        const stats = this.circuitBreakerRegistry.getStats(destination);
-        
-        // Broadcast circuit breaker status message
-        this.broadcastCircuitBreakerStatus(
-          destination,
-          'OPEN',
-          stats.failures,
-          `Circuit opened after ${stats.failures} consecutive failures`
-        );
-      }
-
-      return {
-        success: false,
-        messageId: message.messageId,
-        error: error instanceof Error ? error.message : String(error)
-      };
+      // Transform the error to include circuit breaker info
+      const circuitState = breaker.getStats().state;
+      const enhancedError: any = new Error(`Failed to send message to ${destination} (Circuit: ${circuitState})`);
+      enhancedError.originalError = error;
+      enhancedError.circuitBreakerState = circuitState;
+      enhancedError.destination = destination;
+      
+      throw enhancedError;
     }
   }
-
+  
+  /**
+   * Send a health check message to an agent
+   */
+  public async sendHealthCheck(agentId: string): Promise<void> {
+    const requestId = `health-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+    
+    const healthCheckMessage: AgentMessage = {
+      messageId: requestId,
+      correlationId: undefined,
+      timestamp: new Date(),
+      source: 'system:health-monitor',
+      destination: agentId,
+      eventType: EnhancedMessageEventType.HEALTH_CHECK as any,
+      payload: {
+        timestamp: Date.now(),
+        requestId
+      },
+      metadata: {
+        priority: 'HIGH' as any
+      }
+    };
+    
+    await this.sendMessage(healthCheckMessage);
+  }
+  
   /**
    * Broadcast a message to all agents
    */
-  public async broadcast(message: AgentMessage): Promise<MessageSendResult[]> {
+  public async broadcastMessage(message: Omit<AgentMessage, 'destination'>): Promise<void> {
     try {
-      await this.baseBus.broadcast(message);
-      this.metrics.messagesSent++;
-      
-      return [{ success: true, messageId: message.messageId }];
+      await this.bus.broadcast(message as any);
     } catch (error) {
-      this.metrics.errors++;
-      
-      log(`Error broadcasting message: ${error}`, 'enhanced-bus');
-      
-      return [{
-        success: false,
-        messageId: message.messageId,
-        error: error instanceof Error ? error.message : String(error)
-      }];
+      const enhancedError: any = new Error('Failed to broadcast message');
+      enhancedError.originalError = error;
+      throw enhancedError;
     }
   }
-
+  
   /**
-   * Register a message handler with the bus
+   * Broadcast a circuit breaker state change
    */
-  public on(event: string, handler: Function): void {
-    if (!this.messageHandlers.has(event)) {
-      this.messageHandlers.set(event, []);
+  private async broadcastCircuitBreakerState(agentId: string, state: CircuitState): Promise<void> {
+    let eventType: EnhancedMessageEventType;
+    
+    switch (state) {
+      case CircuitState.OPEN:
+        eventType = EnhancedMessageEventType.CIRCUIT_BREAKER_OPEN;
+        break;
+      case CircuitState.HALF_OPEN:
+        eventType = EnhancedMessageEventType.CIRCUIT_BREAKER_HALF_OPEN;
+        break;
+      case CircuitState.CLOSED:
+        eventType = EnhancedMessageEventType.CIRCUIT_BREAKER_CLOSED;
+        break;
+      default:
+        return; // Unknown state, don't broadcast
     }
-
-    this.messageHandlers.get(event)!.push(handler);
-  }
-
-  /**
-   * Remove a message handler
-   */
-  public off(event: string, handler: Function): void {
-    if (this.messageHandlers.has(event)) {
-      const handlers = this.messageHandlers.get(event)!;
-      const index = handlers.indexOf(handler);
-      if (index !== -1) {
-        handlers.splice(index, 1);
+    
+    const stats = this.circuitBreakerRegistry.getStats(agentId);
+    
+    const message: Omit<AgentMessage, 'destination'> = {
+      messageId: `circuit-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`,
+      correlationId: undefined,
+      timestamp: new Date(),
+      source: 'system:circuit-breaker',
+      eventType: (MessageEventType.STATUS_UPDATE || eventType) as any,
+      payload: {
+        agentId,
+        state,
+        failures: stats.failures,
+        timestamp: Date.now()
+      },
+      metadata: {
+        priority: 'HIGH' as any
       }
+    };
+    
+    try {
+      await this.broadcastMessage(message);
+    } catch (error) {
+      console.error('Failed to broadcast circuit breaker state change:', error);
     }
   }
-
+  
   /**
-   * Send a health check to a specific agent
+   * Set up circuit breaker event listeners
    */
-  public async sendHealthCheck(
-    sourceAgentId: string,
-    targetAgentId: string,
-    requestMetrics: boolean = false
-  ): Promise<MessageSendResult> {
-    const message = createHealthCheckMessage(
-      sourceAgentId,
-      targetAgentId,
-      'basic',
-      requestMetrics
-    );
-
-    return this.sendMessage(message);
+  private setupCircuitBreakerListeners(): void {
+    // Subscribe to circuit breaker state change events
+    // This would be implemented in a real system
   }
-
+  
   /**
-   * Get bus metrics
-   */
-  public getMetrics(): any {
-    return {
-      ...this.metrics,
-      uptime: Math.round((new Date().getTime() - this.metrics.startTime.getTime()) / 1000)
-    };
-  }
-
-  /**
-   * Reset circuit breaker for a specific destination
-   */
-  public resetCircuitBreaker(destination: string): boolean {
-    return this.circuitBreakerRegistry.resetBreaker(destination);
-  }
-
-  /**
-   * Disconnect and clean up
+   * Disconnect the bus
    */
   public async disconnect(): Promise<void> {
-    // Remove our listener from the base bus
-    // (if the base bus supports removing listeners)
-    
-    // Disconnect the base bus
-    await this.baseBus.disconnect();
-    
-    // Clear all local handlers
-    this.messageHandlers.clear();
-    
-    log('Enhanced communication bus disconnected', 'enhanced-bus');
-  }
-
-  /**
-   * Handle incoming messages from the base bus
-   */
-  private handleIncomingMessage(message: AgentMessage): void {
-    // Update metrics
-    this.metrics.messagesReceived++;
-
-    // Handle enhanced message types
-    if (message.eventType === EnhancedMessageEventType.CIRCUIT_BREAKER_OPEN ||
-        message.eventType === EnhancedMessageEventType.CIRCUIT_BREAKER_HALF_OPEN ||
-        message.eventType === EnhancedMessageEventType.CIRCUIT_BREAKER_CLOSED) {
-      this.handleCircuitBreakerStatusMessage(message);
-    }
-
-    // Emit event to all registered handlers
-    this.emit('message', message);
-
-    // Also emit specific event for the message type
-    this.emit(message.eventType, message);
-  }
-
-  /**
-   * Handle a circuit breaker status change message
-   */
-  private handleCircuitBreakerStatusMessage(message: AgentMessage): void {
-    const { state, target } = message.payload;
-    
-    log(`Received circuit breaker status message: ${state} for ${target}`, 'enhanced-bus');
-    
-    // No action needed here, just logging for now
-    // In a more sophisticated implementation, we might update our local view of circuit states
-  }
-
-  /**
-   * Emit an event to all registered handlers
-   */
-  private emit(event: string, ...args: any[]): void {
-    if (this.messageHandlers.has(event)) {
-      for (const handler of this.messageHandlers.get(event)!) {
-        try {
-          handler(...args);
-        } catch (error) {
-          log(`Error in handler for event ${event}: ${error}`, 'enhanced-bus');
-          this.metrics.errors++;
-        }
-      }
-    }
-  }
-
-  /**
-   * Broadcast a circuit breaker status change
-   */
-  private async broadcastCircuitBreakerStatus(
-    target: string,
-    state: 'OPEN' | 'HALF_OPEN' | 'CLOSED',
-    failures: number,
-    details?: string
-  ): Promise<void> {
-    const message = createCircuitBreakerStatusMessage(
-      'system:enhanced-bus',
-      state,
-      target,
-      failures,
-      details
-    );
-
     try {
-      await this.baseBus.broadcast(message);
+      await this.bus.disconnect();
     } catch (error) {
-      log(`Error broadcasting circuit breaker status: ${error}`, 'enhanced-bus');
+      console.error('Error disconnecting enhanced communication bus:', error);
     }
+  }
+  
+  /**
+   * Send an agent status update
+   */
+  public async sendAgentStatusUpdate(agentId: string, status: string, details?: Record<string, any>): Promise<void> {
+    let eventType: EnhancedMessageEventType;
+    
+    switch (status) {
+      case 'STARTING':
+        eventType = EnhancedMessageEventType.AGENT_STARTING;
+        break;
+      case 'READY':
+        eventType = EnhancedMessageEventType.AGENT_READY;
+        break;
+      case 'BUSY':
+        eventType = EnhancedMessageEventType.AGENT_BUSY;
+        break;
+      case 'ERROR':
+        eventType = EnhancedMessageEventType.AGENT_ERROR;
+        break;
+      case 'DEGRADED':
+        eventType = EnhancedMessageEventType.AGENT_DEGRADED;
+        break;
+      case 'SHUTTING_DOWN':
+        eventType = EnhancedMessageEventType.AGENT_SHUTTING_DOWN;
+        break;
+      case 'RESTARTING':
+        eventType = EnhancedMessageEventType.AGENT_RESTARTING;
+        break;
+      case 'OFFLINE':
+        eventType = EnhancedMessageEventType.AGENT_OFFLINE;
+        break;
+      default:
+        eventType = EnhancedMessageEventType.AGENT_READY; // Default to READY
+    }
+    
+    const message: Omit<AgentMessage, 'destination'> = {
+      messageId: `status-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`,
+      correlationId: undefined,
+      timestamp: new Date(),
+      source: agentId,
+      eventType: (MessageEventType.STATUS_UPDATE || eventType) as any,
+      payload: {
+        agentId,
+        status,
+        details,
+        timestamp: Date.now()
+      },
+      metadata: {
+        priority: 'MEDIUM' as any
+      }
+    };
+    
+    try {
+      await this.broadcastMessage(message);
+    } catch (error) {
+      console.error(`Failed to broadcast status update for ${agentId}:`, error);
+    }
+  }
+  
+  /**
+   * Send a validation request with circuit breaker protection
+   */
+  public async sendValidationRequest(
+    source: string, 
+    destination: string, 
+    data: any, 
+    validationType: string
+  ): Promise<void> {
+    const message: AgentMessage = {
+      messageId: `validation-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`,
+      correlationId: undefined,
+      timestamp: new Date(),
+      source,
+      destination,
+      eventType: EnhancedMessageEventType.VALIDATION_REQUEST as any,
+      payload: {
+        data,
+        validationType,
+        timestamp: Date.now()
+      },
+      metadata: {
+        priority: 'HIGH' as any
+      }
+    };
+    
+    await this.sendMessage(message);
   }
 }
