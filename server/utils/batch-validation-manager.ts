@@ -6,6 +6,9 @@
  */
 
 import { backgroundProcessor, TaskInfo, TaskPriority } from './background-processor';
+
+// Re-export TaskPriority for use in the API
+export { TaskPriority };
 import { log } from '../vite';
 import { DataQualitySnapshot, Property, PropertyValuationHistory } from '@shared/washington-schema';
 import { AgentResilienceIntegration } from '../agents/resilience-integration';

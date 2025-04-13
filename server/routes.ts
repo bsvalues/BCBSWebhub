@@ -13,6 +13,7 @@ import { randomUUID } from "crypto";
 import { db } from "./db";
 import agentRoutes from "./routes/agent-routes";
 import batchValidationApi from "./api/batch-validation-api";
+import { registerAdvancedAnalyticsAPI } from "./api/advanced-analytics-api";
 
 // Define a common error handler for API routes
 const handleApiError = (res: Response, error: any) => {
@@ -1700,6 +1701,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register AI agent system routes
   console.log('Registering AI agent system routes...');
   app.use('/api/agents', ensureAuthenticated, agentRoutes);
+  
+  // Register batch validation API
+  app.use('/api/batch-validation', ensureAuthenticated, batchValidationApi);
+  
+  // Register advanced analytics API routes
+  console.log('Registering advanced analytics API routes...');
+  registerAdvancedAnalyticsAPI(app);
 
   return httpServer;
 }

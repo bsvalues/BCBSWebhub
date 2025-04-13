@@ -70,10 +70,14 @@ router.post('/', async (req: Request, res: Response) => {
     const userId = req.session?.userInfo?.id;
     
     // Submit batch validation job
-    const batchId = batchValidationManager.submitBatchValidation({
+    // Convert string validation type to enum value
+    const typedOptions = {
       ...validationResult.data,
+      validationType: ValidationTypes[validationResult.data.validationType as keyof typeof ValidationTypes],
       userId
-    });
+    };
+    
+    const batchId = batchValidationManager.submitBatchValidation(typedOptions);
     
     log(`Submitted batch validation job ${batchId}`, 'api');
     

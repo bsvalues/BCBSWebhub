@@ -1,161 +1,263 @@
-import { pgTable, text, serial, integer, numeric, timestamp, boolean, jsonb, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
-import { users } from "./schema";
+/**
+ * Washington State-specific property schema
+ * 
+ * This file defines the data structures for property assessment
+ * according to Washington State requirements and guidelines.
+ */
 
-// Washington State specific property types
-export const propertyTypeEnum = pgEnum("property_type", [
-  "residential", 
-  "commercial", 
-  "industrial", 
-  "agricultural", 
-  "timber", 
-  "open_space", 
-  "other"
-]);
+import { z } from 'zod';
+import { createInsertSchema } from 'drizzle-zod';
+import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
 
-// Washington State land use codes (based on Washington's classification system)
-export const waLandUseCodeEnum = pgEnum("wa_land_use_code", [
-  // Residential codes
-  "R1", // Single Family
-  "R2", // Multi-Family
-  "R3", // Mobile Home Parks
-  "R4", // Condominiums
-  
-  // Commercial codes
-  "C1", // Retail/Service
-  "C2", // Office
-  "C3", // Warehouse/Storage
-  "C4", // Hotel/Motel
-  
-  // Industrial codes
-  "I1", // Light Manufacturing
-  "I2", // Heavy Manufacturing
-  "I3", // Technology/R&D
-  
-  // Agricultural codes
-  "A1", // Cropland
-  "A2", // Grazing
-  "A3", // Orchard
-  "A4", // Vineyard
-  
-  // Timber codes
-  "T1", // Hardwood
-  "T2", // Softwood
-  "T3", // Mixed
-  
-  // Open space codes
-  "O1", // Park/Recreation
-  "O2", // Conservation
-  "O3", // Wetland
-]);
+/**
+ * Property types according to Washington State classification
+ */
+export const PropertyTypes = {
+  RESIDENTIAL: 'RESIDENTIAL',
+  COMMERCIAL: 'COMMERCIAL',
+  INDUSTRIAL: 'INDUSTRIAL',
+  AGRICULTURAL: 'AGRICULTURAL',
+  VACANT: 'VACANT',
+  MULTI_FAMILY: 'MULTI_FAMILY',
+  RECREATIONAL: 'RECREATIONAL',
+  FORESTRY: 'FORESTRY',
+  OTHER: 'OTHER'
+} as const;
 
-// Washington property model with WA-specific fields
-export const properties = pgTable("properties", {
-  id: serial("id").primaryKey(),
+/**
+ * Land use codes based on Washington State standards
+ */
+export const LandUseCodes = {
+  // Residential
+  R100: '100', // Single Family Residence
+  R101: '101', // Single Family Residence with Basement
+  R102: '102', // Mobile Home
+  R103: '103', // Manufactured Home
+  R105: '105', // Condominium
+  R109: '109', // Multi-Family (2-4 Units)
+  R111: '111', // Multi-Family (5+ Units)
   
-  // Identifiers (WA format)
-  parcelNumber: text("parcel_number").notNull().unique(), // WA format: XX-XXXX-XXX-XXXX
-  taxAccountNumber: text("tax_account_number"),
+  // Commercial
+  C200: '200', // General Commercial
+  C210: '210', // Office Building
+  C220: '220', // Retail
+  C230: '230', // Restaurant
+  C240: '240', // Hotel/Motel
+  
+  // Industrial
+  I300: '300', // General Industrial
+  I310: '310', // Manufacturing
+  I320: '320', // Warehouse
+  
+  // Agricultural
+  A400: '400', // General Agricultural
+  A410: '410', // Cropland
+  A420: '420', // Pasture
+  A430: '430', // Orchard
+  
+  // Other
+  O500: '500', // Vacant Land
+  O600: '600', // Recreational
+  O700: '700', // Forestry
+} as const;
+
+// Create enum object for land use codes to use in validators
+export const waLandUseCodeEnum = {
+  enumValues: [
+    '100', '101', '102', '103', '105', '109', '111',
+    '200', '210', '220', '230', '240',
+    '300', '310', '320',
+    '400', '410', '420', '430',
+    '500', '600', '700'
+  ]
+};
+
+/**
+ * Parcel number format validator based on Washington State standard format XX-XXXX-XXX-XXXX
+ */
+export const parcelNumberValidator = (value: string): boolean => {
+  return /^\d{2}-\d{4}-\d{3}-\d{4}$/.test(value);
+};
+
+/**
+ * Property database schema definition
+ */
+export const properties = sqliteTable('properties', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  parcelNumber: text('parcel_number').notNull().unique(),
+  propertyType: text('property_type').notNull(),
+  landUseCode: text('land_use_code').notNull(),
   
   // Location data
-  siteAddress: text("site_address"),
-  city: text("city"),
-  county: text("county").default("Benton"), // Default to Benton County
-  zipCode: text("zip_code"),
-  legalDescription: text("legal_description"),
+  address: text('address'),
+  city: text('city'),
+  county: text('county').default('Benton'),
+  state: text('state').default('WA'),
+  zipCode: text('zip_code'),
+  latitude: real('latitude'),
+  longitude: real('longitude'),
   
-  // Classification (Washington State specific)
-  propertyType: propertyTypeEnum("property_type").notNull(),
-  landUseCode: waLandUseCodeEnum("land_use_code"),
-  taxingDistrict: text("taxing_district"),
-  schoolDistrict: text("school_district"),
+  // Zoning and land data
+  zoneCode: text('zone_code'),
+  lotSizeSqFt: real('lot_size_sq_ft'),
+  floodZone: text('flood_zone'),
   
-  // Physical characteristics
-  acres: numeric("acres"),
-  landSqFt: numeric("land_sq_ft"),
-  buildingSqFt: numeric("building_sq_ft"),
-  yearBuilt: integer("year_built"),
-  bedrooms: integer("bedrooms"),
-  bathrooms: numeric("bathrooms"),
-  stories: integer("stories"),
+  // Building characteristics
+  buildingType: text('building_type'),
+  yearBuilt: integer('year_built'),
+  totalSqFt: real('total_sq_ft'),
+  bedrooms: integer('bedrooms'),
+  bathrooms: real('bathrooms'),
+  stories: integer('stories'),
+  heatingCooling: text('heating_cooling'),
+  foundation: text('foundation'),
+  roofType: text('roof_type'),
+  condition: text('condition'),
   
-  // Valuation data (required for WA assessments)
-  assessmentYear: integer("assessment_year").notNull(),
-  landValue: numeric("land_value").notNull(),
-  improvementValue: numeric("improvement_value").notNull(),
-  totalValue: numeric("total_value").notNull(), // Must equal landValue + improvementValue
-  taxableValue: numeric("taxable_value"), // May differ from totalValue due to exemptions
+  // Valuation data
+  assessmentYear: integer('assessment_year').notNull(),
+  landValue: real('land_value').notNull(),
+  improvementValue: real('improvement_value').notNull(),
+  totalValue: real('total_value').notNull(),
+  priorYearValue: real('prior_year_value'),
   
-  // Exemption information (WA specific)
-  exemptionAmount: numeric("exemption_amount").default("0"),
-  exemptionType: text("exemption_type"), // Senior/disability, etc.
-  exemptionExpirationDate: timestamp("exemption_expiration_date"),
+  // Tax information
+  taxCode: text('tax_code'),
+  millRate: real('mill_rate'),
+  taxAmount: real('tax_amount'),
   
-  // Geospatial data (for GIS integration)
-  geoData: jsonb("geo_data"),
+  // Administrative data
+  lastUpdated: text('last_updated'),
+  lastInspection: text('last_inspection'),
+  inspectionDue: text('inspection_due'),
   
-  // Metadata for tracking changes
-  lastUpdatedBy: integer("last_updated_by").references(() => users.id),
-  lastUpdateDate: timestamp("last_update_date").defaultNow(),
-  createdAt: timestamp("created_at").defaultNow(),
+  // Notes and additional information
+  notes: text('notes'),
+  exemptions: text('exemptions'),
 });
 
-// Property valuation history (for time-series analysis)
-export const propertyValuationHistory = pgTable("property_valuation_history", {
-  id: serial("id").primaryKey(),
-  propertyId: integer("property_id").notNull().references(() => properties.id),
-  assessmentYear: integer("assessment_year").notNull(),
-  assessmentDate: timestamp("assessment_date").notNull(),
-  landValue: numeric("land_value").notNull(),
-  improvementValue: numeric("improvement_value").notNull(),
-  totalValue: numeric("total_value").notNull(),
-  taxableValue: numeric("taxable_value"),
-  changeReason: text("change_reason"),
-  updatedBy: integer("updated_by").references(() => users.id),
-  updatedAt: timestamp("updated_at").defaultNow(),
+/**
+ * Property valuation history schema
+ */
+export const propertyValuationHistory = sqliteTable('property_valuation_history', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  propertyId: integer('property_id').notNull(),
+  assessmentYear: integer('assessment_year').notNull(),
+  assessmentDate: text('assessment_date').notNull(),
+  landValue: real('land_value').notNull(),
+  improvementValue: real('improvement_value').notNull(),
+  totalValue: real('total_value').notNull(),
+  reasonForChange: text('reason_for_change'),
+  assessorId: integer('assessor_id'),
 });
 
-// Data quality metrics (collected over time)
-export const dataQualitySnapshots = pgTable("data_quality_snapshots", {
-  id: serial("id").primaryKey(),
-  snapshotDate: timestamp("snapshot_date").defaultNow().notNull(),
-  completenessScore: numeric("completeness_score").notNull(), // 0-1 scale
-  accuracyScore: numeric("accuracy_score").notNull(), // 0-1 scale
-  consistencyScore: numeric("consistency_score").notNull(), // 0-1 scale
-  timelinessScore: numeric("timeliness_score").notNull(), // 0-1 scale
-  overallScore: numeric("overall_score").notNull(), // 0-1 scale
-  metrics: jsonb("metrics").notNull(), // Detailed metrics
-  issueCounts: jsonb("issue_counts"), // Count of issues by type
-  createdBy: integer("created_by").references(() => users.id),
+/**
+ * Property inspection schema
+ */
+export const propertyInspections = sqliteTable('property_inspections', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  propertyId: integer('property_id').notNull(),
+  inspectionDate: text('inspection_date').notNull(),
+  inspectorId: integer('inspector_id').notNull(),
+  inspectionType: text('inspection_type').notNull(),
+  findings: text('findings'),
+  photos: text('photos'),
+  followUpRequired: integer('follow_up_required', { mode: 'boolean' }).default(false),
+  completionStatus: text('completion_status').default('PENDING'),
 });
 
-// Create insert and select types for TypeScript
-export type Property = typeof properties.$inferSelect;
-export type InsertProperty = typeof properties.$inferInsert;
-
-export type PropertyValuationHistory = typeof propertyValuationHistory.$inferSelect;
-export type InsertPropertyValuationHistory = typeof propertyValuationHistory.$inferInsert;
-
-export type DataQualitySnapshot = typeof dataQualitySnapshots.$inferSelect;
-export type InsertDataQualitySnapshot = typeof dataQualitySnapshots.$inferInsert;
+/**
+ * Property tax exemption schema
+ */
+export const propertyExemptions = sqliteTable('property_exemptions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  propertyId: integer('property_id').notNull(),
+  exemptionType: text('exemption_type').notNull(),
+  startDate: text('start_date').notNull(),
+  endDate: text('end_date'),
+  exemptionAmount: real('exemption_amount'),
+  exemptionPercentage: real('exemption_percentage'),
+  approvedBy: integer('approved_by'),
+  documentationPath: text('documentation_path'),
+});
 
 // Create insert schemas with validation
 export const insertPropertySchema = createInsertSchema(properties)
-  .omit({ 
-    id: true, 
-    lastUpdateDate: true, 
-    createdAt: true 
-  });
+  .extend({
+    parcelNumber: z.string().refine(parcelNumberValidator, {
+      message: 'Parcel number must be in format XX-XXXX-XXX-XXXX'
+    }),
+    totalValue: z.number().refine(
+      (val: number, ctx: any) => {
+        // Validate that total value equals land + improvement value
+        const landValue = (ctx.data?.landValue as number) || 0;
+        const improvementValue = (ctx.data?.improvementValue as number) || 0;
+        return Math.abs(val - (landValue + improvementValue)) < 0.01;
+      },
+      {
+        message: 'Total value must equal land value plus improvement value'
+      }
+    )
+  })
+  .omit({ id: true });
 
-export const insertPropertyValuationHistorySchema = createInsertSchema(propertyValuationHistory)
-  .omit({ 
-    id: true, 
-    updatedAt: true 
-  });
+export const insertValuationHistorySchema = createInsertSchema(propertyValuationHistory)
+  .omit({ id: true });
 
+export const insertInspectionSchema = createInsertSchema(propertyInspections)
+  .omit({ id: true });
+
+export const insertExemptionSchema = createInsertSchema(propertyExemptions)
+  .omit({ id: true });
+
+// Type definitions for use in application code
+export type Property = typeof properties.$inferSelect;
+export type NewProperty = z.infer<typeof insertPropertySchema>;
+
+export type PropertyValuationHistory = typeof propertyValuationHistory.$inferSelect;
+export type NewPropertyValuationHistory = z.infer<typeof insertValuationHistorySchema>;
+
+export type PropertyInspection = typeof propertyInspections.$inferSelect;
+export type NewPropertyInspection = z.infer<typeof insertInspectionSchema>;
+
+export type PropertyExemption = typeof propertyExemptions.$inferSelect;
+export type NewPropertyExemption = z.infer<typeof insertExemptionSchema>;
+
+/**
+ * Data quality snapshot interface and schema for metrics tracking
+ */
+export interface DataQualitySnapshot {
+  id?: number;
+  snapshotDate: Date;
+  completenessScore: string;
+  accuracyScore: string;
+  consistencyScore: string;
+  timelinessScore: string;
+  overallScore: string;
+  issueCounts: Record<string, number>;
+  metrics: Record<string, any>;
+  createdBy: number | null;
+}
+
+/**
+ * Data quality snapshots table for tracking data quality metrics over time
+ */
+export const dataQualitySnapshots = sqliteTable('data_quality_snapshots', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  snapshotDate: text('snapshot_date').notNull(),
+  completenessScore: text('completeness_score').notNull(),
+  accuracyScore: text('accuracy_score').notNull(),
+  consistencyScore: text('consistency_score').notNull(),
+  timelinessScore: text('timeliness_score').notNull(),
+  overallScore: text('overall_score').notNull(),
+  issueCounts: text('issue_counts').notNull(), // JSON string
+  metrics: text('metrics').notNull(), // JSON string
+  createdBy: integer('created_by'),
+  createdAt: text('created_at').notNull()
+});
+
+// Create insert schema for data quality snapshots
 export const insertDataQualitySnapshotSchema = createInsertSchema(dataQualitySnapshots)
-  .omit({ 
-    id: true, 
-    snapshotDate: true 
-  });
+  .omit({ id: true });
+
+export type InsertDataQualitySnapshot = z.infer<typeof insertDataQualitySnapshotSchema>;
